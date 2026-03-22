@@ -41,6 +41,9 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket path |
 | `DOCKER_API_VERSION` | `v1.43` | Docker Engine API version |
 
+> [!WARNING]
+> Mount the Docker socket **without** `:ro`. Direct mode must write HTTP requests to the socket to call the Docker Engine API. A read-only mount causes `docker inspect` and all API calls to fail, which triggers a crash loop that will take down the Caddy container.
+
 ### Compose Example
 
 <details>
@@ -114,7 +117,7 @@ services:
       POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
       # COMPOSE_DIR is not mounted — direct mode activates automatically
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock  # must NOT be :ro — direct mode writes to the socket
       - caddy-manager-data:/data
     depends_on:
       caddy:
