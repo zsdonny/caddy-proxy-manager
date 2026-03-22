@@ -361,17 +361,19 @@ describe('L4 Caddy config generation', () => {
   });
 
   it('same port with different protocols creates separate servers', async () => {
+    // DNS (port 5353) is a real-world case where both TCP and UDP share a port —
+    // this test ensures the grouping key includes protocol so they get separate servers.
     await insertL4Host({
-      name: 'TCP Echo',
+      name: 'DNS TCP',
       protocol: 'tcp',
-      listenAddress: ':44444',
-      upstreams: JSON.stringify(['10.0.0.1:44444']),
+      listenAddress: ':5353',
+      upstreams: JSON.stringify(['10.0.0.1:5353']),
     });
     await insertL4Host({
-      name: 'UDP Echo',
+      name: 'DNS UDP',
       protocol: 'udp',
-      listenAddress: ':44444',
-      upstreams: JSON.stringify(['10.0.0.2:44444']),
+      listenAddress: ':5353',
+      upstreams: JSON.stringify(['10.0.0.2:5353']),
     });
 
     const rows = await db.select().from(l4ProxyHosts);
@@ -379,21 +381,21 @@ describe('L4 Caddy config generation', () => {
 
     expect(Object.keys(config)).toHaveLength(2);
     expect(config.l4_server_0).toEqual({
-      listen: [':44444'],
+      listen: [':5353'],
       routes: [
         {
           handle: [
-            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.1:44444'] }] },
+            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.1:5353'] }] },
           ],
         },
       ],
     });
     expect(config.l4_server_1).toEqual({
-      listen: ['udp/:44444'],
+      listen: ['udp/:5353'],
       routes: [
         {
           handle: [
-            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.2:44444'] }] },
+            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.2:5353'] }] },
           ],
         },
       ],
