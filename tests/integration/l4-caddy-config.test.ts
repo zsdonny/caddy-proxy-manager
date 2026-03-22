@@ -48,16 +48,21 @@ function buildExpectedL4Config(rows: (typeof l4ProxyHosts.$inferSelect)[]) {
   const enabledRows = rows.filter(r => r.enabled);
   if (enabledRows.length === 0) return null;
 
+  const formatListenAddress = (protocol: string, listenAddress: string) => {
+    return protocol === 'udp' ? `udp/${listenAddress}` : listenAddress;
+  };
+
   const serverMap = new Map<string, typeof enabledRows>();
   for (const host of enabledRows) {
-    const key = host.listenAddress;
+    const key = `${host.protocol}:${host.listenAddress}`;
     if (!serverMap.has(key)) serverMap.set(key, []);
     serverMap.get(key)!.push(host);
   }
 
   const servers: Record<string, unknown> = {};
   let serverIdx = 0;
-  for (const [listenAddr, hosts] of serverMap) {
+  for (const [, hosts] of serverMap) {
+    const listenAddr = formatListenAddress(hosts[0].protocol, hosts[0].listenAddress);
     const routes = hosts.map(host => {
       const route: Record<string, unknown> = {};
       const matcherValues = host.matcherValue ? JSON.parse(host.matcherValue) as string[] : [];
@@ -351,8 +356,48 @@ describe('L4 Caddy config generation', () => {
     const rows = await db.select().from(l4ProxyHosts);
     const config = buildExpectedL4Config(rows)!;
     const server = config.l4_server_0 as any;
-    expect(server.listen).toEqual([':5353']);
+    expect(server.listen).toEqual(['udp/:5353']);
     expect(server.routes[0].handle[0].upstreams).toHaveLength(2);
+  });
+
+  it('same port with different protocols creates separate servers', async () => {
+    await insertL4Host({
+      name: 'TCP Echo',
+      protocol: 'tcp',
+      listenAddress: ':44444',
+      upstreams: JSON.stringify(['10.0.0.1:44444']),
+    });
+    await insertL4Host({
+      name: 'UDP Echo',
+      protocol: 'udp',
+      listenAddress: ':44444',
+      upstreams: JSON.stringify(['10.0.0.2:44444']),
+    });
+
+    const rows = await db.select().from(l4ProxyHosts);
+    const config = buildExpectedL4Config(rows)!;
+
+    expect(Object.keys(config)).toHaveLength(2);
+    expect(config.l4_server_0).toEqual({
+      listen: [':44444'],
+      routes: [
+        {
+          handle: [
+            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.1:44444'] }] },
+          ],
+        },
+      ],
+    });
+    expect(config.l4_server_1).toEqual({
+      listen: ['udp/:44444'],
+      routes: [
+        {
+          handle: [
+            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.2:44444'] }] },
+          ],
+        },
+      ],
+    });
   });
 
   it('TLS SNI with multiple hostnames', async () => {
