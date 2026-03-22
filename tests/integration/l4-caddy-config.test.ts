@@ -48,8 +48,11 @@ function buildExpectedL4Config(rows: (typeof l4ProxyHosts.$inferSelect)[]) {
   const enabledRows = rows.filter(r => r.enabled);
   if (enabledRows.length === 0) return null;
 
-  const formatListenAddress = (protocol: string, listenAddress: string) => {
-    return protocol === 'udp' ? `udp/${listenAddress}` : listenAddress;
+  const formatListenAddress = (protocol: string, address: string) => {
+    if (protocol === 'udp') {
+      return address.startsWith('udp/') ? address : `udp/${address}`;
+    }
+    return address;
   };
 
   const serverMap = new Map<string, typeof enabledRows>();
@@ -82,7 +85,7 @@ function buildExpectedL4Config(rows: (typeof l4ProxyHosts.$inferSelect)[]) {
       const upstreams = JSON.parse(host.upstreams) as string[];
       const proxyHandler: Record<string, unknown> = {
         handler: 'proxy',
-        upstreams: upstreams.map(u => ({ dial: [u] })),
+        upstreams: upstreams.map(u => ({ dial: [formatListenAddress(host.protocol, u)] })),
       };
       if (host.proxyProtocolVersion) proxyHandler.proxy_protocol = host.proxyProtocolVersion;
 
@@ -357,7 +360,10 @@ describe('L4 Caddy config generation', () => {
     const config = buildExpectedL4Config(rows)!;
     const server = config.l4_server_0 as any;
     expect(server.listen).toEqual(['udp/:5353']);
-    expect(server.routes[0].handle[0].upstreams).toHaveLength(2);
+    expect(server.routes[0].handle[0].upstreams).toEqual([
+      { dial: ['udp/8.8.8.8:53'] },
+      { dial: ['udp/8.8.4.4:53'] },
+    ]);
   });
 
   it('same port with different protocols creates separate servers', async () => {
@@ -379,8 +385,13 @@ describe('L4 Caddy config generation', () => {
     const rows = await db.select().from(l4ProxyHosts);
     const config = buildExpectedL4Config(rows)!;
 
-    expect(Object.keys(config)).toHaveLength(2);
-    expect(config.l4_server_0).toEqual({
+    const servers = Object.values(config) as any[];
+    expect(servers).toHaveLength(2);
+
+    const tcpServer = servers.find(s => s.listen?.[0] === ':5353');
+    const udpServer = servers.find(s => s.listen?.[0] === 'udp/:5353');
+
+    expect(tcpServer).toEqual({
       listen: [':5353'],
       routes: [
         {
@@ -390,12 +401,12 @@ describe('L4 Caddy config generation', () => {
         },
       ],
     });
-    expect(config.l4_server_1).toEqual({
+    expect(udpServer).toEqual({
       listen: ['udp/:5353'],
       routes: [
         {
           handle: [
-            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.2:5353'] }] },
+            { handler: 'proxy', upstreams: [{ dial: ['udp/10.0.0.2:5353'] }] },
           ],
         },
       ],
