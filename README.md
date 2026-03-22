@@ -15,6 +15,7 @@
 |--------|-------------|
 | **UDP L4 proxy fix** | L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to the caddy-l4 listen address |
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` |
+| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
@@ -53,7 +54,7 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 services:
   web:
     container_name: caddy-proxy-manager-web
-    image: ghcr.io/fuomag9/caddy-proxy-manager-web:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-web:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
