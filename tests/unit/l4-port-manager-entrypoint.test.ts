@@ -43,7 +43,7 @@ describe('L4 port manager entrypoint.sh', () => {
   it('only recreates the caddy service', () => {
     // The docker compose command should target only "caddy" — never "web" or other services
     const composeUpLines = lines.filter(line =>
-      line.includes('docker compose') && line.includes('up')
+      !line.trimStart().startsWith('#') && line.includes('docker compose') && line.includes('up')
     );
     expect(composeUpLines.length).toBeGreaterThan(0);
     for (const line of composeUpLines) {
@@ -54,7 +54,7 @@ describe('L4 port manager entrypoint.sh', () => {
 
   it('uses --no-deps flag to prevent dependency cascades', () => {
     const composeUpLines = lines.filter(line =>
-      line.includes('docker compose') && line.includes('up')
+      !line.trimStart().startsWith('#') && line.includes('docker compose') && line.includes('up')
     );
     for (const line of composeUpLines) {
       expect(line).toContain('--no-deps');
@@ -63,7 +63,7 @@ describe('L4 port manager entrypoint.sh', () => {
 
   it('uses --force-recreate to ensure port changes take effect', () => {
     const composeUpLines = lines.filter(line =>
-      line.includes('docker compose') && line.includes('up')
+      !line.trimStart().startsWith('#') && line.includes('docker compose') && line.includes('up')
     );
     for (const line of composeUpLines) {
       expect(line).toContain('--force-recreate');
