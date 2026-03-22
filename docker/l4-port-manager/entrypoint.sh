@@ -39,24 +39,6 @@ CADDY_CONTAINER_NAME="${CADDY_CONTAINER_NAME:-caddy-proxy-manager-caddy}"
 DOCKER_SOCKET="${DOCKER_SOCKET:-/var/run/docker.sock}"
 API_VER="${DOCKER_API_VERSION:-v1.43}"
 
-# Auto-negotiate API version: query the daemon and use its MaxAPIVersion if
-# it is lower than our default.  This handles older Docker daemons (e.g. those
-# that only support up to v1.41) without requiring manual DOCKER_API_VERSION config.
-_negotiate_api_version() {
-  _daemon_max=$(curl -s --unix-socket "$DOCKER_SOCKET" \
-    "http://localhost/version" 2>/dev/null | jq -r '.ApiVersion // empty' 2>/dev/null || echo "")
-  if [ -z "$_daemon_max" ]; then
-    return  # Can't reach daemon yet; keep the configured/default version
-  fi
-  _our_ver="${API_VER#v}"  # strip leading 'v' for numeric comparison
-  # Compare as floats using awk
-  if awk "BEGIN{exit !($_our_ver > $_daemon_max)}"; then
-    log "Docker daemon max API version is v${_daemon_max} (our default is ${API_VER}). Using v${_daemon_max}."
-    API_VER="v${_daemon_max}"
-  fi
-}
-_negotiate_api_version
-
 TRIGGER_FILE="$DATA_DIR/l4-ports.trigger"
 STATUS_FILE="$DATA_DIR/l4-ports.status"
 OVERRIDE_FILE="$DATA_DIR/docker-compose.l4-ports.yml"
@@ -335,6 +317,20 @@ do_apply() {
 # (The main compose stack starts caddy without the L4 ports override file.)
 # Only apply if the override file exists — it is created on first "Apply Ports".
 # ---------------------------------------------------------------------------
+
+# Auto-negotiate API version: query the daemon and use its MaxAPIVersion if
+# it is lower than our default.  This handles older Docker daemons (e.g. those
+# that only support up to v1.41) without requiring manual DOCKER_API_VERSION config.
+_daemon_max=$(curl -s --unix-socket "$DOCKER_SOCKET" \
+  "http://localhost/version" 2>/dev/null | jq -r '.ApiVersion // empty' 2>/dev/null || echo "")
+if [ -n "$_daemon_max" ]; then
+  _our_ver="${API_VER#v}"
+  if awk "BEGIN{exit !($_our_ver > $_daemon_max)}"; then
+    log "Docker daemon max API version is v${_daemon_max} (our default is ${API_VER}). Using v${_daemon_max}."
+    API_VER="v${_daemon_max}"
+  fi
+fi
+unset _daemon_max _our_ver
 
 # In direct mode, capture the caddy container's base config before any apply.
 # If capture fails (caddy not running yet), skip the startup apply — the poll
