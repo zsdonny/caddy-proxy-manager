@@ -84,7 +84,13 @@ jobs:
           git add docker/web/.upstream-sha
           git commit -m "chore: track upstream web @ ${{ steps.upstream.outputs.sha }}"
           git push
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          # Only alert on real changes — skip on first bootstrap (no stored SHA yet)
+          if [ -n "${{ steps.stored.outputs.sha }}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::First run — bootstrapped upstream SHA. No alert sent."
+          fi
 
       - name: Send Pushover alert when upstream web code changes
         if: steps.synced.outputs.changed == 'true'
