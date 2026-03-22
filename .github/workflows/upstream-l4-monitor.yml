@@ -1,0 +1,90 @@
+name: Monitor Upstream L4 Port Manager
+
+# Runs daily to:
+# 1. Detect new commits to docker/l4-port-manager/ in upstream (fuomag9/caddy-proxy-manager)
+#    and auto-trigger a rebuild by updating .upstream-sha on the develop branch.
+# 2. Send a Pushover notification if upstream starts building their own l4-port-manager image,
+#    at which point this fork's workflow may become redundant.
+#
+# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: 'Send a test Pushover alert (skips upstream checks)'
+        type: boolean
+        default: false
+
+jobs:
+  check-and-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v6
+        with:
+          ref: develop
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get upstream latest l4-port-manager commit SHA
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api \
+            "repos/fuomag9/caddy-proxy-manager/commits?path=docker/l4-port-manager&per_page=1" \
+            --jq '.[0].sha' 2>/dev/null || echo "")
+          if [ -z "$SHA" ]; then
+            echo "::warning::Could not fetch upstream SHA — API may be unavailable"
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Read stored upstream SHA
+        id: stored
+        run: |
+          FILE="docker/l4-port-manager/.upstream-sha"
+          if [ -f "$FILE" ]; then
+            echo "sha=$(cat "$FILE")" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync upstream SHA and trigger rebuild if changed
+        if: >
+          steps.upstream.outputs.sha != '' &&
+          steps.upstream.outputs.sha != steps.stored.outputs.sha
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${{ steps.upstream.outputs.sha }}" > docker/l4-port-manager/.upstream-sha
+          git add docker/l4-port-manager/.upstream-sha
+          git commit -m "chore: sync upstream l4-port-manager @ ${{ steps.upstream.outputs.sha }}"
+          git push
+          echo "Upstream changed — pushed updated SHA; l4-port-manager build triggered via path filter."
+
+      - name: Check if upstream has added an l4-port-manager build workflow
+        id: upstream-workflow-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FOUND=$(gh api repos/fuomag9/caddy-proxy-manager/contents/.github/workflows \
+            --jq '[.[].name | select(test("l4"; "i"))] | length > 0' 2>/dev/null || echo "false")
+          echo "found=$FOUND" >> "$GITHUB_OUTPUT"
+
+      - name: Send Pushover alert if upstream now builds l4-port-manager
+        if: steps.upstream-workflow-check.outputs.found == 'true' || inputs.test_alert == true
+        run: |
+          curl -s --fail-with-body \
+            --form-string "token=${{ secrets.PUSHOVER_APP_TOKEN }}" \
+            --form-string "user=${{ secrets.PUSHOVER_USER_KEY }}" \
+            --form-string "title=Upstream l4-port-manager detected" \
+            --form-string "message=fuomag9/caddy-proxy-manager now has an l4-port-manager build workflow. Your fork's build may be redundant — check and consider retiring docker-build-l4-port-manager.yml." \
+            --form-string "url=https://github.com/fuomag9/caddy-proxy-manager/tree/main/.github/workflows" \
+            --form-string "url_title=View upstream workflows" \
+            --form-string "priority=1" \
+            https://api.pushover.net/1/messages.json
