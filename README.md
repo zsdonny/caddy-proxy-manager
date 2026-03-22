@@ -39,7 +39,7 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 | `COMPOSE_PROJECT_NAME` | _(auto)_ | Override compose project name (compose mode only) |
 | `COMPOSE_HOST_DIR` | — | Host path of the project directory for compose bind-mount resolution |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket path |
-| `DOCKER_API_VERSION` | `v1.43` | Docker Engine API version |
+| `DOCKER_API_VERSION` | `v1.43` | Docker Engine API version. The sidecar auto-negotiates downward if the daemon's max version is lower — override only if auto-detection fails. |
 
 > [!WARNING]
 > Mount the Docker socket **without** `:ro`. Direct mode must write HTTP requests to the socket to call the Docker Engine API. A read-only mount causes `docker inspect` and all API calls to fail, which triggers a crash loop that will take down the Caddy container.
