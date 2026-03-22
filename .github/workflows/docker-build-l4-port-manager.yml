@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - "docker/l4-port-manager/**"
+      - "!docker/l4-port-manager/.upstream-sha"
       - ".github/workflows/docker-build-l4-port-manager.yml"
       - "docker-compose.yml"
       - "docker-compose.override.yml"
