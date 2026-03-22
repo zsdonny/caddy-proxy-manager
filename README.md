@@ -1,3 +1,143 @@
+<!-- ============================================================
+     FORK-SPECIFIC DOCUMENTATION
+     Fork of fuomag9/caddy-proxy-manager — changes listed below.
+     The upstream README begins after the horizontal rule at the bottom.
+     ============================================================ -->
+
+> [!NOTE]
+> This is a fork of [fuomag9/caddy-proxy-manager](https://github.com/fuomag9/caddy-proxy-manager). The section below documents changes made in this fork. The original upstream README starts after the `---` separator.
+
+# Fork Notes
+
+## Changes from Upstream
+
+| Change | Description |
+|--------|-------------|
+| **UDP L4 proxy fix** | L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to the caddy-l4 listen address |
+| **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` |
+
+## Composeless L4 Port Manager (Direct Mode)
+
+The upstream `l4-port-manager` requires your `docker-compose.yml` to be bind-mounted so it can run `docker compose up` when L4 port bindings change. This is not always practical when using pre-built images from a registry.
+
+This fork adds a **direct mode** that falls back to the Docker Engine API when no compose file is present. Detection is automatic:
+
+- **Compose mode** — used when `$COMPOSE_DIR/docker-compose.yml` exists (default: `/compose/docker-compose.yml`)
+- **Direct mode** — used otherwise; captures Caddy's full container config at startup and recreates it via `curl` to the Docker socket on each L4 trigger
+
+> [!NOTE]
+> On first startup in direct mode, the sidecar saves the Caddy container's configuration (image, networks, volumes, ports, environment) to `$DATA_DIR/.l4-caddy-base-config.json`. This file is recaptured automatically if the Caddy image changes. Delete it manually to force a recapture.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATA_DIR` | `/data` | Shared data volume (must match the `web` container) |
+| `CADDY_CONTAINER_NAME` | `caddy-proxy-manager-caddy` | Name of the Caddy container to recreate |
+| `POLL_INTERVAL` | `2` | Seconds between trigger file checks |
+| `COMPOSE_DIR` | `/compose` | Path checked for `docker-compose.yml` (compose mode only) |
+| `COMPOSE_PROJECT_NAME` | _(auto)_ | Override compose project name (compose mode only) |
+| `COMPOSE_HOST_DIR` | — | Host path of the project directory for compose bind-mount resolution |
+| `DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket path |
+| `DOCKER_API_VERSION` | `v1.43` | Docker Engine API version |
+
+### Compose Example
+
+<details>
+<summary>Full <code>docker-compose.yml</code> using upstream web/caddy images + fork l4-port-manager (no bind-mount needed)</summary>
+
+```yaml
+services:
+  web:
+    container_name: caddy-proxy-manager-web
+    image: ghcr.io/fuomag9/caddy-proxy-manager-web:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
+      CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      DATABASE_PATH: /app/data/caddy-proxy-manager.db
+      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
+      NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
+    volumes:
+      - caddy-manager-data:/app/data
+      - caddy-logs:/logs:ro
+      - caddy-data:/caddy-data:ro
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  caddy:
+    container_name: caddy-proxy-manager-caddy
+    image: ghcr.io/fuomag9/caddy-proxy-manager-caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "80:80/udp"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/logs
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  l4-port-manager:
+    container_name: caddy-proxy-manager-l4-ports
+    # Fork image — adds composeless direct mode
+    image: ghcr.io/zsdonny/caddy-proxy-manager-l4-port-manager:latest
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
+      # COMPOSE_DIR is not mounted — direct mode activates automatically
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - caddy-manager-data:/data
+    depends_on:
+      caddy:
+        condition: service_healthy
+
+networks:
+  caddy-network:
+    driver: bridge
+
+volumes:
+  caddy-manager-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:
+```
+
+</details>
+
+---
+<!-- ============================================================
+     UPSTREAM README (fuomag9/caddy-proxy-manager)
+     ============================================================ -->
+
 # Caddy Proxy Manager
 
 Web interface for managing [Caddy Server](https://caddyserver.com/) reverse proxies and certificates.
