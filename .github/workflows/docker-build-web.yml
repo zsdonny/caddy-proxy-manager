@@ -14,6 +14,7 @@ on:
       - "next.config.mjs"
       - "tsconfig.json"
       - "docker/web/**"
+      - "!docker/web/.upstream-sha"
       - ".github/workflows/docker-build-web.yml"
   workflow_dispatch:
 
