@@ -1,3 +1,6 @@
+# This workflow is kept in sync with upstream (fuomag9/caddy-proxy-manager) for reference.
+# It is intentionally disabled in this fork (zsdonny) — web and caddy images are
+# built and published by upstream. Only the l4-port-manager image is built here.
 name: Build Docker Images (PR)
 
 on:
@@ -12,6 +15,7 @@ env:
 
 jobs:
   build:
+    if: false  # Disabled in fork — built by upstream
     runs-on: ubuntu-latest
     permissions:
       contents: read

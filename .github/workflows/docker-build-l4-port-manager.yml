@@ -1,38 +1,26 @@
-# This workflow is kept in sync with upstream (fuomag9/caddy-proxy-manager) for reference.
-# It is intentionally disabled in this fork (zsdonny) — web and caddy images are
-# built and published by upstream. Only the l4-port-manager image is built here.
-name: Build and Push Docker Images (Trusted)
+name: Build and Push L4 Port Manager Image
 
 on:
   push:
     branches:
-      - main
       - develop
-    tags:
-      - 'v*'
+    paths:
+      - "docker/l4-port-manager/**"
+      - ".github/workflows/docker-build-l4-port-manager.yml"
+      - "docker-compose.yml"
+      - "docker-compose.override.yml"
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}-l4-port-manager
 
 jobs:
   build-and-push:
-    if: false  # Disabled in fork — built by upstream
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        include:
-          - service: web
-            dockerfile: docker/web/Dockerfile
-            context: .
-          - service: caddy
-            dockerfile: docker/caddy/Dockerfile
-            context: .
 
     steps:
       - name: Checkout repository
@@ -52,21 +40,17 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/develop' }}
 
       - name: Build and push Docker image
-        id: build
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: .
+          file: docker/l4-port-manager/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
