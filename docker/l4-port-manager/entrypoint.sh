@@ -87,6 +87,11 @@ detect_project_name() {
 capture_base_config() {
   if [ -f "$BASE_CONFIG_FILE" ]; then
     CURRENT_IMAGE=$(docker inspect --format '{{.Config.Image}}' "$CADDY_CONTAINER_NAME" 2>/dev/null || echo "")
+    # If caddy isn't running, keep the existing base config — don't delete it
+    # just because inspect returned empty string.
+    if [ -z "$CURRENT_IMAGE" ]; then
+      return 0
+    fi
     SAVED_IMAGE=$(jq -r '.[0].Config.Image' "$BASE_CONFIG_FILE" 2>/dev/null || echo "")
     if [ "$CURRENT_IMAGE" = "$SAVED_IMAGE" ]; then
       return 0
@@ -249,15 +254,24 @@ do_apply_direct() {
   docker rm "$CADDY_CONTAINER_NAME" 2>/dev/null || true
 
   # --- Create the new container via Docker Engine API ---
+  # Use -w to capture HTTP status separately so the response body (error detail)
+  # is always available for logging — curl -f would discard it on 4xx/5xx.
   ENCODED_NAME=$(printf '%s' "$CADDY_CONTAINER_NAME" | jq -Rr @uri)
-  if ! RESULT=$(printf '%s' "$REQUEST_BODY" | curl -sf \
+  CREATE_RESP_FILE="/tmp/.l4pm_create_resp"
+  HTTP_STATUS=$(printf '%s' "$REQUEST_BODY" | curl -s \
     --unix-socket "$DOCKER_SOCKET" \
     -H "Content-Type: application/json" \
     -d @- \
-    "http://localhost/${API_VER}/containers/create?name=${ENCODED_NAME}" 2>&1); then
-    ERROR_MSG="Failed to create caddy container via Docker API: $RESULT"
+    -o "$CREATE_RESP_FILE" \
+    -w "%{http_code}" \
+    "http://localhost/${API_VER}/containers/create?name=${ENCODED_NAME}" 2>&1)
+  CREATE_RESULT=$(cat "$CREATE_RESP_FILE" 2>/dev/null || echo "")
+  rm -f "$CREATE_RESP_FILE"
+  if [ "$HTTP_STATUS" != "201" ]; then
+    ERROR_MSG="Failed to create caddy container via Docker API (HTTP $HTTP_STATUS): $CREATE_RESULT"
     write_status "failed" "$ERROR_MSG" "Docker API create error"
     log "ERROR: $ERROR_MSG"
+    log "ERROR: Request body was: $(printf '%s' "$REQUEST_BODY" | jq -c . 2>/dev/null || echo "$REQUEST_BODY")"
     return 1
   fi
 
