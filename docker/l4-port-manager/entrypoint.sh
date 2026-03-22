@@ -305,16 +305,27 @@ do_apply() {
 # ---------------------------------------------------------------------------
 
 # In direct mode, capture the caddy container's base config before any apply.
+# If capture fails (caddy not running yet), skip the startup apply — the poll
+# loop will apply once a new trigger arrives.  This prevents a crash loop where
+# a stale trigger file causes the sidecar to destroy caddy before it has base
+# config, rendering it unable to recreate the container.
+DIRECT_MODE_READY=1
 if [ ! -f "$COMPOSE_DIR/docker-compose.yml" ]; then
   log "No compose file found at $COMPOSE_DIR — will use direct mode."
-  capture_base_config || true
+  if ! capture_base_config; then
+    log "WARNING: Skipping startup apply — caddy base config not available. Will retry on next trigger."
+    write_status "idle" "Port manager sidecar is running. Waiting for caddy to be available before applying L4 ports."
+    DIRECT_MODE_READY=0
+  fi
 fi
-if [ -f "$OVERRIDE_FILE" ]; then
+if [ "$DIRECT_MODE_READY" = "1" ] && [ -f "$OVERRIDE_FILE" ]; then
   log "Startup: applying existing L4 port override..."
   do_apply
 else
-  write_status "idle" "Port manager sidecar is running and ready."
-  log "Started. No L4 port override file yet."
+  if [ "$DIRECT_MODE_READY" = "1" ]; then
+    write_status "idle" "Port manager sidecar is running and ready."
+    log "Started. No L4 port override file yet."
+  fi
 fi
 
 # Capture the current trigger content so the poll loop doesn't re-apply
