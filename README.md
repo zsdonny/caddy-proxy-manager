@@ -9,7 +9,7 @@
 
 # Fork Notes
 
-[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager/actions/workflows/feature-upstream-merge-check.yml)
+[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml)
 
 ## Changes from Upstream
 
@@ -18,11 +18,10 @@
 | Change | Description | Status |
 |--------|-------------|--------|
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
-| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` | Fork-exclusive |
-| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest` | Fork-exclusive |
+| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest` | Fork-exclusive |
+| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them | Fork-exclusive |
-| ~~**UDP L4 proxy fix**~~ | ~~L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to listen and dial addresses~~ | Upstreamed (2026-03-22) |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
@@ -61,7 +60,7 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 services:
   web:
     container_name: caddy-proxy-manager-web
-    image: ghcr.io/zsdonny/caddy-proxy-manager-web:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -93,7 +92,7 @@ services:
 
   caddy:
     container_name: caddy-proxy-manager-caddy
-    image: ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest
     restart: unless-stopped
     ports:
       - "80:80"
@@ -118,7 +117,7 @@ services:
   l4-port-manager:
     container_name: caddy-proxy-manager-l4-ports
     # Fork image — adds composeless direct mode
-    image: ghcr.io/zsdonny/caddy-proxy-manager-l4-port-manager:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-l4-port-manager:latest
     restart: unless-stopped
     environment:
       DATA_DIR: /data
