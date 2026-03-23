@@ -5,11 +5,14 @@
      ============================================================ -->
 
 > [!NOTE]
-> This is a fork of [fuomag9/caddy-proxy-manager](https://github.com/fuomag9/caddy-proxy-manager). The section below documents changes made in this fork. The original upstream README starts after the `---` separator.
+> This is a fork of [fuomag9/caddy-proxy-manager](https://github.com/fuomag9/caddy-proxy-manager). The section below documents changes made in this fork. The original upstream README is collapsed at the bottom of the page.
+>
+> The Caddy image includes a vendored copy of [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin) (Geo/IP-based request blocking), built via xcaddy local replace. An [hourly sync workflow](.github/workflows/sync-caddy-blocker.yml) keeps it up to date.
 
 # Fork Notes
 
 [![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml)
+[![Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/sync-caddy-blocker.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/sync-caddy-blocker.yml)
 
 ## Changes from Upstream
 
@@ -178,6 +181,10 @@ ip link set <NIC> promisc on && ip link add test0 link <NIC> type macvlan mode b
 Use `docker-compose.yml` (or paste it into Portainer). The `l4-port-manager` sidecar will start and the "Apply Ports" banner will reappear when L4 port bindings need updating.
 
 ---
+
+<details>
+<summary><strong>Original Upstream README (fuomag9/caddy-proxy-manager)</strong></summary>
+
 <!-- ============================================================
      UPSTREAM README (fuomag9/caddy-proxy-manager)
      ============================================================ -->
@@ -486,3 +493,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 [⬆ back to top](#caddy-proxy-manager)
 
 </div>
+
+</details>
