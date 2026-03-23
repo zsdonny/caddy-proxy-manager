@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { Resolver } from "node:dns/promises";
+import { Resolver, resolve4 } from "node:dns/promises";
 import { join } from "node:path";
 import { isIP } from "node:net";
 import crypto from "node:crypto";
@@ -1748,10 +1748,24 @@ async function buildCaddyDocument() {
   const l4Servers = await buildL4Servers();
   const l4App = l4Servers ? { layer4: { servers: l4Servers } } : {};
 
+  // In macvlan mode, bind admin to the bridge IP only so the admin API
+  // is not reachable via the public macvlan IP.
+  let adminListen = "0.0.0.0:2019";
+  let adminOrigins: string[] = ["caddy:2019", "localhost:2019", "localhost"];
+  if (config.caddyNetworkMode !== "bridge") {
+    try {
+      const [bridgeIp] = await resolve4("caddy");
+      adminListen = `${bridgeIp}:2019`;
+      adminOrigins = [...adminOrigins, `${bridgeIp}:2019`];
+    } catch {
+      // DNS resolution failed — fall back to 0.0.0.0; origins check still protects
+    }
+  }
+
   return {
     admin: {
-      listen: "0.0.0.0:2019",
-      origins: ["caddy:2019", "localhost:2019", "localhost"]
+      listen: adminListen,
+      origins: adminOrigins
     },
     ...loggingApp,
     apps: {

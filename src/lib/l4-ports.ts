@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import crypto from "node:crypto";
 import db from "./db";
+import { config } from "./config";
 import { l4ProxyHosts } from "./db/schema";
 import { eq } from "drizzle-orm";
 
@@ -112,6 +113,11 @@ function hashPorts(ports: string[]): string {
  * Check if the current L4 proxy host config differs from applied ports.
  */
 export async function getL4PortsDiff(): Promise<L4PortsDiff> {
+  if (config.caddyNetworkMode !== "bridge") {
+    // In macvlan mode, all ports are applied instantly via Caddy config reload.
+    // No Docker port binding changes are ever needed.
+    return { currentPorts: [], requiredPorts: [], needsApply: false };
+  }
   const requiredPorts = await getRequiredL4Ports();
   const currentPorts = getAppliedL4Ports();
   const needsApply = hashPorts(requiredPorts) !== hashPorts(currentPorts);
@@ -123,6 +129,11 @@ export async function getL4PortsDiff(): Promise<L4PortsDiff> {
  * Returns the status after triggering.
  */
 export async function applyL4Ports(): Promise<L4PortsStatus> {
+  if (config.caddyNetworkMode !== "bridge") {
+    // In macvlan mode, ports are already applied via Caddy config reload.
+    return { state: "applied", message: "Macvlan mode — L4 port changes are applied instantly via Caddy config reload." };
+  }
+
   const requiredPorts = await getRequiredL4Ports();
 
   // Generate the override YAML
