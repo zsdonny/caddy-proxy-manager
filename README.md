@@ -13,9 +13,11 @@
 
 | Change | Description |
 |--------|-------------|
-| **UDP L4 proxy fix** | L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to the caddy-l4 listen address |
+| **UDP L4 proxy fix** | L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to both the caddy-l4 listen address and each upstream dial address |
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` |
 | **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` |
+| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest` |
+| **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
@@ -43,12 +45,12 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 | `DOCKER_API_VERSION` | `v1.43` | Docker Engine API version. The sidecar auto-negotiates downward if the daemon's max version is lower — override only if auto-detection fails. |
 
 > [!WARNING]
-> Mount the Docker socket **without** `:ro`. Direct mode must write HTTP requests to the socket to call the Docker Engine API. A read-only mount causes `docker inspect` and all API calls to fail, which triggers a crash loop that will take down the Caddy container.
+> Mount the Docker socket **without** `:ro`. Both compose mode and direct mode issue Docker API calls (`docker inspect`, `docker compose`, and raw Engine API requests) that require write access to the socket. A read-only mount causes all of these calls to fail and the sidecar will not function.
 
 ### Compose Example
 
 <details>
-<summary>Full <code>docker-compose.yml</code> using upstream web/caddy images + fork l4-port-manager (no bind-mount needed)</summary>
+<summary>Full <code>docker-compose.yml</code> using fork web + caddy + l4-port-manager images (no bind-mount needed)</summary>
 
 ```yaml
 services:
@@ -86,7 +88,7 @@ services:
 
   caddy:
     container_name: caddy-proxy-manager-caddy
-    image: ghcr.io/fuomag9/caddy-proxy-manager-caddy:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest
     restart: unless-stopped
     ports:
       - "80:80"
@@ -118,7 +120,7 @@ services:
       POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
       # COMPOSE_DIR is not mounted — direct mode activates automatically
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # must NOT be :ro — direct mode writes to the socket
+      - /var/run/docker.sock:/var/run/docker.sock  # must NOT be :ro — both modes write to the socket (docker inspect, docker compose, Engine API)
       - caddy-manager-data:/data
     depends_on:
       caddy:
@@ -136,6 +138,39 @@ volumes:
 ```
 
 </details>
+
+## Macvlan Mode (Zero-Downtime L4)
+
+In the default bridge mode, adding or removing L4 proxy host ports requires the caddy container to be recreated (Docker port bindings are immutable). With macvlan mode, Caddy gets its own static LAN IP and all ports bind directly — so L4 port changes become instant Caddy config reloads with no container restart.
+
+**Requirements:** Linux host with a NIC that supports promiscuous mode. Test with:
+```bash
+ip link set <NIC> promisc on && ip link add test0 link <NIC> type macvlan mode bridge && ip link delete test0
+```
+
+**Portainer:** Paste `docker-compose.macvlan.yml` into the stack editor (instead of `docker-compose.yml`) and set the required environment variables.
+
+**CLI:** `docker compose -f docker-compose.macvlan.yml up -d`
+
+### Required env vars for macvlan mode
+
+| Variable | Example | Description |
+|---|---|---|
+| `MACVLAN_PARENT` | `ens3` | Host NIC (find with `ip -brief link show`) |
+| `MACVLAN_SUBNET` | `192.168.1.0/24` | Your LAN subnet |
+| `MACVLAN_GATEWAY` | `192.168.1.1` | Your LAN gateway |
+| `MACVLAN_IP_RANGE` | `192.168.1.200/30` | IP range to assign Caddy from |
+| `CADDY_MACVLAN_IP` | `192.168.1.200` | Static IP for Caddy on your LAN |
+
+> [!NOTE]
+> The Docker host cannot reach Caddy's macvlan IP directly (Linux macvlan limitation). Other containers and LAN devices can. If host access is needed, create a macvlan shim interface on the host.
+
+> [!NOTE]
+> The `l4-port-manager` sidecar is not included in `docker-compose.macvlan.yml`. It is not needed — L4 port changes apply instantly.
+
+### Switching back to bridge mode
+
+Use `docker-compose.yml` (or paste it into Portainer). The `l4-port-manager` sidecar will start and the "Apply Ports" banner will reappear when L4 port bindings need updating.
 
 ---
 <!-- ============================================================
