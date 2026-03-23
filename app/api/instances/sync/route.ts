@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
+import { revalidatePath } from "next/cache";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync, SyncPayload } from "@/src/lib/instance-sync";
+import { applySyncPayload, getInstanceMode, getPrimaryToken, setReplicaLastSync, SyncPayload } from "@/src/lib/instance-sync";
 
 const DEFAULT_MAX_SYNC_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const _parsedMaxBytes = Number(process.env.INSTANCE_SYNC_MAX_BYTES);
@@ -250,8 +251,8 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
 
 export async function POST(request: NextRequest) {
   const mode = await getInstanceMode();
-  if (mode !== "slave") {
-    return NextResponse.json({ error: "Instance is not configured as a slave" }, { status: 403 });
+  if (mode !== "replica") {
+    return NextResponse.json({ error: "Instance is not configured as a replica" }, { status: 403 });
   }
 
   const rateLimit = checkSyncRateLimit(getClientIp(request));
@@ -265,7 +266,7 @@ export async function POST(request: NextRequest) {
 
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  const expected = await getSlaveMasterToken();
+  const expected = await getPrimaryToken();
 
   if (!expected || !secureTokenCompare(token, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -301,11 +302,12 @@ export async function POST(request: NextRequest) {
     };
     await applySyncPayload(normalizedPayload);
     await applyCaddyConfig();
-    await setSlaveLastSync({ ok: true });
+    await setReplicaLastSync({ ok: true });
+    revalidatePath("/", "layout");
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to apply sync payload";
-    await setSlaveLastSync({ ok: false, error: message }); // still store internally
+    await setReplicaLastSync({ ok: false, error: message }); // still store internally
     return NextResponse.json({ error: "Failed to apply sync payload" }, { status: 500 });
   }
 }

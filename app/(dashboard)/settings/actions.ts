@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
+import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
@@ -37,11 +37,11 @@ export async function updateGeneralSettingsAction(_prevState: ActionResult | nul
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("general");
       await syncInstances();
       revalidatePath("/settings");
-      return { success: true, message: "General settings reset to master defaults" };
+      return { success: true, message: "General settings reset to primary defaults" };
     }
     await saveGeneralSettings({
       primaryDomain: String(formData.get("primaryDomain") ?? ""),
@@ -61,12 +61,12 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("cloudflare");
       try {
         await applyCaddyConfig();
         revalidatePath("/settings");
-        return { success: true, message: "Cloudflare settings reset to master defaults" };
+        return { success: true, message: "Cloudflare settings reset to primary defaults" };
       } catch (error) {
         console.error("Failed to apply Caddy config:", error);
         revalidatePath("/settings");
@@ -118,11 +118,11 @@ export async function updateAuthentikSettingsAction(_prevState: ActionResult | n
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("authentik");
       await syncInstances();
       revalidatePath("/settings");
-      return { success: true, message: "Authentik defaults reset to master values" };
+      return { success: true, message: "Authentik defaults reset to primary values" };
     }
     const outpostDomain = String(formData.get("outpostDomain") ?? "").trim();
     const outpostUpstream = String(formData.get("outpostUpstream") ?? "").trim();
@@ -152,12 +152,12 @@ export async function updateMetricsSettingsAction(_prevState: ActionResult | nul
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("metrics");
       try {
         await applyCaddyConfig();
         revalidatePath("/settings");
-        return { success: true, message: "Metrics settings reset to master defaults" };
+        return { success: true, message: "Metrics settings reset to primary defaults" };
       } catch (error) {
         console.error("Failed to apply Caddy config:", error);
         revalidatePath("/settings");
@@ -204,12 +204,12 @@ export async function updateLoggingSettingsAction(_prevState: ActionResult | nul
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("logging");
       try {
         await applyCaddyConfig();
         revalidatePath("/settings");
-        return { success: true, message: "Logging settings reset to master defaults" };
+        return { success: true, message: "Logging settings reset to primary defaults" };
       } catch (error) {
         console.error("Failed to apply Caddy config:", error);
         revalidatePath("/settings");
@@ -268,12 +268,12 @@ export async function updateDnsSettingsAction(_prevState: ActionResult | null, f
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("dns");
       try {
         await applyCaddyConfig();
         revalidatePath("/settings");
-        return { success: true, message: "DNS settings reset to master defaults" };
+        return { success: true, message: "DNS settings reset to primary defaults" };
       } catch (error) {
         console.error("Failed to apply Caddy config:", error);
         revalidatePath("/settings");
@@ -333,12 +333,12 @@ export async function updateUpstreamDnsResolutionSettingsAction(
     await requireAdmin();
     const mode = await getInstanceMode();
     const overrideEnabled = formData.get("overrideEnabled") === "on";
-    if (mode === "slave" && !overrideEnabled) {
+    if (mode === "replica" && !overrideEnabled) {
       await clearSetting("upstream_dns_resolution");
       try {
         await applyCaddyConfig();
         revalidatePath("/settings");
-        return { success: true, message: "Upstream DNS resolution settings reset to master defaults" };
+        return { success: true, message: "Upstream DNS resolution settings reset to primary defaults" };
       } catch (error) {
         console.error("Failed to apply Caddy config:", error);
         revalidatePath("/settings");
@@ -388,8 +388,8 @@ export async function updateUpstreamDnsResolutionSettingsAction(
 export async function updateInstanceModeAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const mode = String(formData.get("mode") ?? "").trim() as "standalone" | "master" | "slave";
-    if (mode !== "standalone" && mode !== "master" && mode !== "slave") {
+    const mode = String(formData.get("mode") ?? "").trim() as "standalone" | "primary" | "replica";
+    if (mode !== "standalone" && mode !== "primary" && mode !== "replica") {
       return { success: false, message: "Invalid instance mode" };
     }
     await setInstanceMode(mode);
@@ -401,18 +401,18 @@ export async function updateInstanceModeAction(_prevState: ActionResult | null, 
   }
 }
 
-export async function updateSlaveMasterTokenAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+export async function updateReplicaPrimaryTokenAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
     const clearToken = formData.get("clearToken") === "on";
-    const rawToken = formData.get("masterToken") ? String(formData.get("masterToken")).trim() : "";
-    const current = await getSlaveMasterToken();
+    const rawToken = formData.get("primaryToken") ? String(formData.get("primaryToken")).trim() : "";
+    const current = await getPrimaryToken();
 
     // If clearing, allow empty token
     if (clearToken) {
-      await setSlaveMasterToken("");
+      await setPrimaryToken("");
       revalidatePath("/settings");
-      return { success: true, message: "Master sync token removed" };
+      return { success: true, message: "Primary sync token removed" };
     }
 
     // If a new token is provided, validate it
@@ -421,28 +421,28 @@ export async function updateSlaveMasterTokenAction(_prevState: ActionResult | nu
       if (!validation.valid) {
         return { success: false, message: validation.error };
       }
-      await setSlaveMasterToken(rawToken);
+      await setPrimaryToken(rawToken);
       revalidatePath("/settings");
-      return { success: true, message: "Master sync token updated" };
+      return { success: true, message: "Primary sync token updated" };
     }
 
     // No change - keep existing token
     if (!current) {
       return { success: false, message: "No token provided. Please enter a sync token." };
     }
-    return { success: true, message: "Master sync token unchanged" };
+    return { success: true, message: "Primary sync token unchanged" };
   } catch (error) {
-    console.error("Failed to update master token:", error);
-    return { success: false, message: error instanceof Error ? error.message : "Failed to update master token" };
+    console.error("Failed to update primary token:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to update primary token" };
   }
 }
 
-export async function createSlaveInstanceAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+export async function createReplicaInstanceAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
     const mode = await getInstanceMode();
-    if (mode !== "master") {
-      return { success: false, message: "Instance mode must be set to master to add slaves" };
+    if (mode !== "primary") {
+      return { success: false, message: "Instance mode must be set to primary to add replicas" };
     }
     const name = String(formData.get("name") ?? "").trim();
     const baseUrl = String(formData.get("baseUrl") ?? "").trim().replace(/\/$/, "");
@@ -459,17 +459,17 @@ export async function createSlaveInstanceAction(_prevState: ActionResult | null,
 
     await createInstance({ name, baseUrl, apiToken, enabled: true });
     revalidatePath("/settings");
-    return { success: true, message: "Slave instance added" };
+    return { success: true, message: "Replica instance added" };
   } catch (error) {
-    console.error("Failed to create slave instance:", error);
-    return { success: false, message: error instanceof Error ? error.message : "Failed to create slave instance" };
+    console.error("Failed to create replica instance:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to create replica instance" };
   }
 }
 
-export async function deleteSlaveInstanceAction(formData: FormData): Promise<void> {
+export async function deleteReplicaInstanceAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const mode = await getInstanceMode();
-  if (mode !== "master") {
+  if (mode !== "primary") {
     return;
   }
   const id = Number(formData.get("instanceId"));
@@ -480,10 +480,10 @@ export async function deleteSlaveInstanceAction(formData: FormData): Promise<voi
   revalidatePath("/settings");
 }
 
-export async function toggleSlaveInstanceAction(formData: FormData): Promise<void> {
+export async function toggleReplicaInstanceAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const mode = await getInstanceMode();
-  if (mode !== "master") {
+  if (mode !== "primary") {
     return;
   }
   const id = Number(formData.get("instanceId"));
@@ -599,14 +599,14 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
   }
 }
 
-export async function syncSlaveInstancesAction(_prevState: ActionResult | null, _formData: FormData): Promise<ActionResult> {
+export async function syncReplicaInstancesAction(_prevState: ActionResult | null, _formData: FormData): Promise<ActionResult> {
   void _prevState;
   void _formData;
   try {
     await requireAdmin();
     const mode = await getInstanceMode();
-    if (mode !== "master") {
-      return { success: false, message: "Instance mode must be set to master to sync slaves" };
+    if (mode !== "primary") {
+      return { success: false, message: "Instance mode must be set to primary to sync replicas" };
     }
     const result = await syncInstances();
     revalidatePath("/settings");
@@ -627,8 +627,8 @@ export async function syncSlaveInstancesAction(_prevState: ActionResult | null, 
     }
     return { success: true, message: `Sync completed (${result.success}/${result.total} succeeded)` };
   } catch (error) {
-    console.error("Failed to sync slave instances:", error);
-    return { success: false, message: error instanceof Error ? error.message : "Failed to sync slave instances" };
+    console.error("Failed to sync replica instances:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to sync replica instances" };
   }
 }
 

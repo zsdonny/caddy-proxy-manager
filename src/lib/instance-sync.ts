@@ -5,7 +5,7 @@ import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
 import { applyL4Ports, getL4PortsDiff } from "./l4-ports";
 
-export type InstanceMode = "standalone" | "master" | "slave";
+export type InstanceMode = "standalone" | "primary" | "replica";
 
 export type SyncSettings = {
   general: unknown | null;
@@ -29,16 +29,16 @@ export type SyncPayload = {
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
-    /** Optional — not present in payloads from older master instances */
+    /** Optional — not present in payloads from older primary instances */
     l4ProxyHosts?: Array<typeof l4ProxyHosts.$inferSelect>;
   };
 };
 
 const INSTANCE_MODE_KEY = "instance_mode";
-const MASTER_TOKEN_KEY = "instance_master_token";
+const PRIMARY_TOKEN_KEY = "instance_master_token";
 const SYNCED_PREFIX = "synced:";
-const SLAVE_LAST_SYNC_AT_KEY = "instance_last_sync_at";
-const SLAVE_LAST_SYNC_ERROR_KEY = "instance_last_sync_error";
+const REPLICA_LAST_SYNC_AT_KEY = "instance_last_sync_at";
+const REPLICA_LAST_SYNC_ERROR_KEY = "instance_last_sync_error";
 
 /**
  * Environment variable names for instance sync configuration.
@@ -46,26 +46,37 @@ const SLAVE_LAST_SYNC_ERROR_KEY = "instance_last_sync_error";
  */
 const ENV_INSTANCE_MODE = "INSTANCE_MODE";
 const ENV_INSTANCE_SYNC_TOKEN = "INSTANCE_SYNC_TOKEN";
+/** Preferred env var for replica list. */
+const ENV_INSTANCE_REPLICAS = "INSTANCE_REPLICAS";
+/** @deprecated Use INSTANCE_REPLICAS instead. */
 const ENV_INSTANCE_SLAVES = "INSTANCE_SLAVES";
 const ENV_SYNC_INTERVAL = "INSTANCE_SYNC_INTERVAL";
 const ENV_SYNC_ALLOW_HTTP = "INSTANCE_SYNC_ALLOW_HTTP";
 
 /**
- * Type for slave instances configured via environment variable.
+ * Type for replica instances configured via environment variable.
  */
-export type EnvSlaveInstance = {
+export type EnvReplicaInstance = {
   name: string;
   url: string;
   token: string;
 };
 
 /**
- * Parses INSTANCE_SLAVES environment variable.
+ * Parses INSTANCE_REPLICAS (or deprecated INSTANCE_SLAVES) environment variable.
  * Expected format: JSON array of {name, url, token} objects
- * Example: [{"name":"slave1","url":"http://slave:3000","token":"secret"}]
+ * Example: [{"name":"replica1","url":"http://replica:3000","token":"secret"}]
  */
-export function getEnvSlaveInstances(): EnvSlaveInstance[] {
-  const envValue = process.env[ENV_INSTANCE_SLAVES];
+export function getEnvReplicaInstances(): EnvReplicaInstance[] {
+  // Prefer INSTANCE_REPLICAS; fall back to deprecated INSTANCE_SLAVES
+  let envValue = process.env[ENV_INSTANCE_REPLICAS];
+  if (!envValue || envValue.trim().length === 0) {
+    const legacyValue = process.env[ENV_INSTANCE_SLAVES];
+    if (legacyValue && legacyValue.trim().length > 0) {
+      console.warn("INSTANCE_SLAVES is deprecated. Use INSTANCE_REPLICAS instead.");
+      envValue = legacyValue;
+    }
+  }
   if (!envValue || envValue.trim().length === 0) {
     return [];
   }
@@ -73,11 +84,11 @@ export function getEnvSlaveInstances(): EnvSlaveInstance[] {
   try {
     const parsed = JSON.parse(envValue);
     if (!Array.isArray(parsed)) {
-      console.warn("INSTANCE_SLAVES must be a JSON array");
+      console.warn("INSTANCE_REPLICAS must be a JSON array");
       return [];
     }
 
-    return parsed.filter((item): item is EnvSlaveInstance => {
+    return parsed.filter((item): item is EnvReplicaInstance => {
       if (typeof item !== "object" || item === null) return false;
       if (typeof item.name !== "string" || item.name.trim().length === 0) return false;
       if (typeof item.url !== "string" || item.url.trim().length === 0) return false;
@@ -85,7 +96,7 @@ export function getEnvSlaveInstances(): EnvSlaveInstance[] {
       return true;
     });
   } catch (error) {
-    console.warn("Failed to parse INSTANCE_SLAVES environment variable:", error);
+    console.warn("Failed to parse INSTANCE_REPLICAS environment variable:", error);
     return [];
   }
 }
@@ -133,7 +144,8 @@ function isHttpUrl(url: string): boolean {
  */
 export function isInstanceModeFromEnv(): boolean {
   const envMode = process.env[ENV_INSTANCE_MODE];
-  return envMode === "master" || envMode === "slave" || envMode === "standalone";
+  return envMode === "primary" || envMode === "replica" || envMode === "standalone"
+    || envMode === "master" || envMode === "slave";
 }
 
 /**
@@ -147,14 +159,28 @@ export function isSyncTokenFromEnv(): boolean {
 export async function getInstanceMode(): Promise<InstanceMode> {
   // Environment variable takes precedence
   const envMode = process.env[ENV_INSTANCE_MODE];
-  if (envMode === "master" || envMode === "slave" || envMode === "standalone") {
+  if (envMode === "primary" || envMode === "replica" || envMode === "standalone") {
     return envMode;
+  }
+  if (envMode === "master") {
+    console.warn("INSTANCE_MODE=master is deprecated. Use INSTANCE_MODE=primary instead.");
+    return "primary";
+  }
+  if (envMode === "slave") {
+    console.warn("INSTANCE_MODE=slave is deprecated. Use INSTANCE_MODE=replica instead.");
+    return "replica";
   }
 
   // Fall back to database setting
   const stored = await getSetting<string>(INSTANCE_MODE_KEY);
-  if (stored === "master" || stored === "slave" || stored === "standalone") {
+  if (stored === "primary" || stored === "replica" || stored === "standalone") {
     return stored;
+  }
+  if (stored === "master") {
+    return "primary";
+  }
+  if (stored === "slave") {
+    return "replica";
   }
   return "standalone";
 }
@@ -168,7 +194,7 @@ export async function setInstanceMode(mode: InstanceMode): Promise<void> {
   await setSetting(INSTANCE_MODE_KEY, mode);
 }
 
-export async function getSlaveMasterToken(): Promise<string | null> {
+export async function getPrimaryToken(): Promise<string | null> {
   // Environment variable takes precedence
   const envToken = process.env[ENV_INSTANCE_SYNC_TOKEN];
   if (typeof envToken === "string" && envToken.length > 0) {
@@ -176,40 +202,40 @@ export async function getSlaveMasterToken(): Promise<string | null> {
   }
 
   // Fall back to database setting
-  const stored = await getSetting<string>(MASTER_TOKEN_KEY);
+  const stored = await getSetting<string>(PRIMARY_TOKEN_KEY);
   if (!stored) {
     return null;
   }
   if (!isEncryptedSecret(stored)) {
     try {
-      await setSetting(MASTER_TOKEN_KEY, encryptSecret(stored));
+      await setSetting(PRIMARY_TOKEN_KEY, encryptSecret(stored));
     } catch (error) {
-      console.warn("Failed to encrypt stored master token:", error);
+      console.warn("Failed to encrypt stored primary token:", error);
     }
     return stored;
   }
   try {
     return decryptSecret(stored);
   } catch (error) {
-    console.error("Failed to decrypt stored master token:", error);
+    console.error("Failed to decrypt stored primary token:", error);
     return null;
   }
 }
 
-export async function setSlaveMasterToken(token: string | null): Promise<void> {
+export async function setPrimaryToken(token: string | null): Promise<void> {
   // If token is set via environment, don't allow changing it
   if (isSyncTokenFromEnv()) {
     console.warn("Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime");
     return;
   }
   const next = token ? encryptSecret(token) : "";
-  await setSetting(MASTER_TOKEN_KEY, next);
+  await setSetting(PRIMARY_TOKEN_KEY, next);
 }
 
-export async function getSlaveLastSync(): Promise<{ at: string | null; error: string | null }> {
+export async function getReplicaLastSync(): Promise<{ at: string | null; error: string | null }> {
   const [at, error] = await Promise.all([
-    getSetting<string>(SLAVE_LAST_SYNC_AT_KEY),
-    getSetting<string>(SLAVE_LAST_SYNC_ERROR_KEY)
+    getSetting<string>(REPLICA_LAST_SYNC_AT_KEY),
+    getSetting<string>(REPLICA_LAST_SYNC_ERROR_KEY)
   ]);
 
   return {
@@ -218,9 +244,9 @@ export async function getSlaveLastSync(): Promise<{ at: string | null; error: st
   };
 }
 
-export async function setSlaveLastSync(result: { ok: boolean; error?: string | null }) {
-  await setSetting(SLAVE_LAST_SYNC_AT_KEY, nowIso());
-  await setSetting(SLAVE_LAST_SYNC_ERROR_KEY, result.ok ? "" : result.error ?? "Unknown sync error");
+export async function setReplicaLastSync(result: { ok: boolean; error?: string | null }) {
+  await setSetting(REPLICA_LAST_SYNC_AT_KEY, nowIso());
+  await setSetting(REPLICA_LAST_SYNC_ERROR_KEY, result.ok ? "" : result.error ?? "Unknown sync error");
 }
 
 export async function getSyncedSetting<T>(key: string): Promise<T | null> {
@@ -305,7 +331,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
 
 export async function syncInstances(): Promise<{ total: number; success: number; failed: number; skippedHttp: number }> {
   const mode = await getInstanceMode();
-  if (mode !== "master") {
+  if (mode !== "primary") {
     return { total: 0, success: 0, failed: 0, skippedHttp: 0 };
   }
 
@@ -315,7 +341,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
   });
 
   // Get environment-configured instances
-  const envTargets = getEnvSlaveInstances();
+  const envTargets = getEnvReplicaInstances();
 
   if (dbTargets.length === 0 && envTargets.length === 0) {
     return { total: 0, success: 0, failed: 0, skippedHttp: 0 };

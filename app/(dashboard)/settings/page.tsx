@@ -1,6 +1,6 @@
 import SettingsClient from "./SettingsClient";
 import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings } from "@/src/lib/settings";
-import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
+import { getInstanceMode, getReplicaLastSync, getPrimaryToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvReplicaInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { requireAdmin } from "@/src/lib/auth";
 
@@ -24,7 +24,7 @@ export default async function SettingsPage() {
   ]);
 
   const [overrideGeneral, overrideCloudflare, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
-    instanceMode === "slave"
+    instanceMode === "replica"
       ? await Promise.all([
           getSetting("general"),
           getSetting("cloudflare"),
@@ -36,12 +36,12 @@ export default async function SettingsPage() {
         ])
       : [null, null, null, null, null, null, null];
 
-  const [slaveToken, slaveLastSync] = instanceMode === "slave"
-    ? await Promise.all([getSlaveMasterToken(), getSlaveLastSync()])
+  const [replicaToken, replicaLastSync] = instanceMode === "replica"
+    ? await Promise.all([getPrimaryToken(), getReplicaLastSync()])
     : [null, null];
 
-  const instances = instanceMode === "master" ? await listInstances() : [];
-  const envInstances = instanceMode === "master" ? getEnvSlaveInstances() : [];
+  const instances = instanceMode === "primary" ? await listInstances() : [];
+  const envInstances = instanceMode === "primary" ? getEnvReplicaInstances() : [];
 
   return (
     <SettingsClient
@@ -70,12 +70,12 @@ export default async function SettingsPage() {
           dns: overrideDns !== null,
           upstreamDnsResolution: overrideUpstreamDnsResolution !== null
         },
-        slave: instanceMode === "slave" ? {
-          hasToken: Boolean(slaveToken),
-          lastSyncAt: slaveLastSync?.at ?? null,
-          lastSyncError: slaveLastSync?.error ?? null
+        replica: instanceMode === "replica" ? {
+          hasToken: Boolean(replicaToken),
+          lastSyncAt: replicaLastSync?.at ?? null,
+          lastSyncError: replicaLastSync?.error ?? null
         } : null,
-        master: instanceMode === "master" ? { instances, envInstances } : null
+        primary: instanceMode === "primary" ? { instances, envInstances } : null
       }}
     />
   );

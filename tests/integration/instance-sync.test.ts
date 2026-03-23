@@ -529,13 +529,13 @@ describe('applySyncPayload', () => {
     expect(rows[0].listenAddress).toBe(':5432');
   });
 
-  it('works with payload missing l4ProxyHosts (backward compat with old master)', async () => {
-    // Old master instances don't include l4ProxyHosts in their payload.
-    // The slave should still sync successfully and not crash.
+  it('works with payload missing l4ProxyHosts (backward compat with old primary)', async () => {
+    // Old primary instances don't include l4ProxyHosts in their payload.
+    // The replica should still sync successfully and not crash.
     await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'Existing L4' }));
 
     const payload = emptyPayload();
-    // Explicitly remove l4ProxyHosts to simulate old master payload
+    // Explicitly remove l4ProxyHosts to simulate old primary payload
     delete (payload.data as Record<string, unknown>).l4ProxyHosts;
 
     await expect(applySyncPayload(payload)).resolves.toBeUndefined();
