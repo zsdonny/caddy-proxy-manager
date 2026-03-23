@@ -1,8 +1,14 @@
 name: Feature/Fix Branch — Upstream Merge Check
 
 # Checks every feature/* and fix/* branch against fuomag9/caddy-proxy-manager@develop.
-# ● Step summary written on every run (readable in the Actions UI)
-# ● Silent notification (priority=-1, no sound) sent ONLY when ≥1 conflict found
+# Each branch gets its own parallel job card in the Actions UI (✅ clean / ❌ conflict).
+# Adding or removing a feature/* or fix/* branch automatically adjusts the matrix next run.
+#
+# Job flow:  enumerate  →  check (dynamic matrix, one job per branch)  →  report
+#
+# ● Each check job writes a mini summary showing which files conflict (if any)
+# ● report job writes the aggregate summary table + Copilot Analysis
+# ● Silent Pushover notification (priority=-1) sent ONLY when ≥1 conflict found
 # ● GitHub Models gpt-4o-mini (free tier — no Copilot Pro quota consumed) classifies each
 #   conflicting file as FORK-EXCLUSIVE (expected divergence) vs GENUINE CLASH (needs resolution)
 #
@@ -13,108 +19,194 @@ on:
     - cron: '0 7 * * *'  # Daily at 07:00 UTC
   workflow_dispatch:
 
+env:
+  UPSTREAM_REPO: fuomag9/caddy-proxy-manager
+  UPSTREAM_BRANCH: develop
+
 jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Job 1: Enumerate feature/* and fix/* branches → JSON array output
+  # ─────────────────────────────────────────────────────────────────
+  enumerate:
+    name: Enumerate branches
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    outputs:
+      branches: ${{ steps.list.outputs.branches }}
+      count: ${{ steps.list.outputs.count }}
+
+    steps:
+      - name: List feature/* and fix/* branches
+        id: list
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCHES_JSON=$(gh api "repos/${{ github.repository }}/branches" \
+            --paginate \
+            --jq '[.[].name | select(test("^(feature|fix)/"))] | sort' \
+            2>/dev/null || echo "[]")
+
+          COUNT=$(echo "$BRANCHES_JSON" | jq 'length')
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::notice::No feature/* or fix/* branches found — nothing to check."
+          fi
+
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "branches=$BRANCHES_JSON" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 2: One matrix job per branch — runs in parallel
+  #         Job name = branch name; exits 1 on conflict (red ✗ in UI)
+  # ─────────────────────────────────────────────────────────────────
   check:
+    name: ${{ matrix.branch }}
+    needs: enumerate
+    if: needs.enumerate.outputs.count != '0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false   # one conflict doesn't cancel sibling branch checks
+      matrix:
+        branch: ${{ fromJson(needs.enumerate.outputs.branches) }}
+
+    steps:
+      - name: Checkout repository (full history + all origin refs)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote and fetch upstream/${{ env.UPSTREAM_BRANCH }}
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}" --no-tags --quiet
+
+      - name: Check ${{ matrix.branch }} against upstream/${{ env.UPSTREAM_BRANCH }}
+        id: merge
+        run: |
+          BRANCH="${{ matrix.branch }}"
+
+          # fetch-depth:0 already pulled all origin/* refs; ensure this specific one is present
+          git fetch origin "${BRANCH}:refs/remotes/origin/${BRANCH}" \
+            --no-tags --quiet 2>/dev/null || true
+
+          # Dry-run 3-way merge — no workspace changes
+          set +e
+          MERGE_OUTPUT=$(git merge-tree --write-tree \
+            "refs/remotes/origin/${BRANCH}" \
+            "refs/remotes/upstream/${UPSTREAM_BRANCH}" 2>&1)
+          MERGE_EXIT=$?
+          set -e
+
+          if [ "$MERGE_EXIT" -eq 0 ]; then
+            STATUS="clean"
+            CONFLICT_FILES="[]"
+          else
+            STATUS="conflict"
+            # Extract conflicting file paths — covers content, add/add, modify/delete types
+            CONFLICT_FILES=$(echo "$MERGE_OUTPUT" \
+              | awk '
+                  /^CONFLICT/ && /Merge conflict in/ { print $NF }
+                  /^CONFLICT \(modify\/delete\)/     { print $3 }
+                  /^CONFLICT \(delete\/modify\)/     { print $3 }
+                ' \
+              | sort -u \
+              | (jq -R . | jq -s . 2>/dev/null || echo "[]"))
+            [ -z "$CONFLICT_FILES" ] && CONFLICT_FILES="[]"
+          fi
+
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          # Write result.json for aggregation in the report job
+          SAFE_BRANCH="${BRANCH//\//-}"
+          mkdir -p /tmp/result
+          jq -n \
+            --arg b  "$BRANCH" \
+            --arg s  "$STATUS" \
+            --argjson c "$CONFLICT_FILES" \
+            '{"branch": $b, "status": $s, "conflicts": $c}' \
+            > /tmp/result/result.json
+
+          echo "result_dir=/tmp/result" >> "$GITHUB_OUTPUT"
+          echo "safe_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Write per-branch step summary
+        if: always()
+        run: |
+          BRANCH="${{ matrix.branch }}"
+          STATUS="${{ steps.merge.outputs.status }}"
+          {
+            if [ "$STATUS" = "clean" ]; then
+              echo "## ✅ \`${BRANCH}\` — merges cleanly into \`upstream/${UPSTREAM_BRANCH}\`"
+            else
+              echo "## ❌ \`${BRANCH}\` — conflicts with \`upstream/${UPSTREAM_BRANCH}\`"
+              echo ""
+              echo "**Conflicting files:**"
+              echo ""
+              jq -r '.conflicts[] | "- `\(.)`"' /tmp/result/result.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ steps.merge.outputs.safe_branch }}
+          path: /tmp/result/result.json
+          retention-days: 1
+          if-no-files-found: warn
+
+      - name: Fail job on conflict (sets red ✗ in Actions UI)
+        if: steps.merge.outputs.status == 'conflict'
+        run: |
+          echo "::error::Branch '${{ matrix.branch }}' has merge conflicts with upstream/${UPSTREAM_BRANCH}."
+          exit 1
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 3: Aggregate results → summary table + AI analysis + Pushover
+  # ─────────────────────────────────────────────────────────────────
+  report:
+    name: Report
+    needs: [enumerate, check]
+    if: always() && needs.enumerate.outputs.count != '0'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       models: read
 
-    env:
-      UPSTREAM_REPO: fuomag9/caddy-proxy-manager
-      UPSTREAM_BRANCH: develop
-
     steps:
-      - name: Checkout repository (full history needed for merge-base resolution)
-        uses: actions/checkout@v6
+      - name: Download all result artifacts
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
+          pattern: result-*
+          path: results
+          merge-multiple: false
 
-      - name: Add upstream remote and fetch
+      - name: Aggregate branch results
+        id: aggregate
         run: |
-          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
-          git fetch upstream "${UPSTREAM_BRANCH}" --no-tags --quiet
-          git fetch origin --no-tags --quiet
-
-      - name: Enumerate feature/* and fix/* branches
-        id: branches
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCHES=$(gh api "repos/${{ github.repository }}/branches" \
-            --paginate \
-            --jq '[.[].name | select(test("^(feature|fix)/"))] | sort | .[]' \
-            2>/dev/null || true)
-
-          if [ -z "$BRANCHES" ]; then
-            echo "::notice::No feature/* or fix/* branches found — nothing to check."
-            echo "count=0" >> "$GITHUB_OUTPUT"
-          else
-            COUNT=$(echo "$BRANCHES" | wc -l | tr -d ' ')
-            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-            {
-              printf 'list<<BREOF\n'
-              echo "$BRANCHES"
-              printf 'BREOF\n'
-            } >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check each branch against upstream/develop
-        id: merge_check
-        if: steps.branches.outputs.count != '0'
-        run: |
+          # Each artifact lands at results/result-<safe-branch>/result.json
           RESULTS_FILE="/tmp/merge-results.json"
-          echo "[]" > "$RESULTS_FILE"
-          CONFLICT_COUNT=0
-          CLEAN_COUNT=0
+          find results -name result.json \
+            | sort \
+            | xargs jq -s '.' \
+            > "$RESULTS_FILE"
 
-          while IFS= read -r BRANCH; do
-            [ -z "$BRANCH" ] && continue
-
-            # Ensure branch ref is available locally (no-op if already fetched via fetch-depth:0)
-            git fetch origin "${BRANCH}:refs/remotes/origin/${BRANCH}" \
-              --no-tags --quiet 2>/dev/null || true
-
-            # Dry-run 3-way merge — automatically finds merge-base, no workspace changes
-            set +e
-            MERGE_OUTPUT=$(git merge-tree --write-tree \
-              "refs/remotes/origin/${BRANCH}" \
-              "refs/remotes/upstream/${UPSTREAM_BRANCH}" 2>&1)
-            MERGE_EXIT=$?
-            set -e
-
-            if [ "$MERGE_EXIT" -eq 0 ]; then
-              CLEAN_COUNT=$((CLEAN_COUNT + 1))
-              jq --arg b "$BRANCH" \
-                '. + [{"branch": $b, "status": "clean", "conflicts": []}]' \
-                "$RESULTS_FILE" > "${RESULTS_FILE}.tmp" && mv "${RESULTS_FILE}.tmp" "$RESULTS_FILE"
-            else
-              CONFLICT_COUNT=$((CONFLICT_COUNT + 1))
-              # Extract conflicting file paths — covers content, add/add, modify/delete conflict types
-              CONFLICT_FILES=$(echo "$MERGE_OUTPUT" \
-                | awk '
-                    /^CONFLICT/ && /Merge conflict in/ { print $NF }
-                    /^CONFLICT \(modify\/delete\)/     { print $3 }
-                    /^CONFLICT \(delete\/modify\)/     { print $3 }
-                  ' \
-                | sort -u \
-                | (jq -R . | jq -s . 2>/dev/null || echo "[]"))
-              [ -z "$CONFLICT_FILES" ] && CONFLICT_FILES="[]"
-
-              jq --arg b "$BRANCH" --argjson c "$CONFLICT_FILES" \
-                '. + [{"branch": $b, "status": "conflicts", "conflicts": $c}]' \
-                "$RESULTS_FILE" > "${RESULTS_FILE}.tmp" && mv "${RESULTS_FILE}.tmp" "$RESULTS_FILE"
-            fi
-          done <<< "${{ steps.branches.outputs.list }}"
+          CONFLICT_COUNT=$(jq '[.[] | select(.status == "conflict")] | length' "$RESULTS_FILE")
+          CLEAN_COUNT=$(jq '[.[] | select(.status == "clean")] | length' "$RESULTS_FILE")
+          TOTAL=$(jq 'length' "$RESULTS_FILE")
 
           echo "conflict_count=$CONFLICT_COUNT" >> "$GITHUB_OUTPUT"
           echo "clean_count=$CLEAN_COUNT" >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
 
       - name: Classify conflicts with GitHub Models (gpt-4o-mini — free tier)
         id: ai
-        if: >
-          steps.merge_check.outcome == 'success' &&
-          steps.merge_check.outputs.conflict_count != '0'
+        if: steps.aggregate.outputs.conflict_count != '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -148,12 +240,12 @@ jobs:
           printf '%s\n' "$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "AI analysis unavailable."')" \
             > /tmp/ai-analysis.txt
 
-      - name: Write step summary
+      - name: Write aggregate step summary
         if: always()
         run: |
-          TOTAL="${{ steps.branches.outputs.count }}"
-          CONFLICT_COUNT="${{ steps.merge_check.outputs.conflict_count }}"
-          CLEAN_COUNT="${{ steps.merge_check.outputs.clean_count }}"
+          TOTAL="${{ steps.aggregate.outputs.total }}"
+          CONFLICT_COUNT="${{ steps.aggregate.outputs.conflict_count }}"
+          CLEAN_COUNT="${{ steps.aggregate.outputs.clean_count }}"
 
           {
             echo "## Feature/Fix Branch — Upstream Merge Check"
@@ -161,7 +253,7 @@ jobs:
             echo "**Upstream:** \`fuomag9/caddy-proxy-manager @ develop\`  |  **$(date -u '+%Y-%m-%d %H:%M UTC')**"
             echo ""
 
-            if [ "${TOTAL:-0}" -eq 0 ] || [ ! -f /tmp/merge-results.json ]; then
+            if [ ! -f /tmp/merge-results.json ] || [ "${TOTAL:-0}" -eq 0 ]; then
               echo "_No \`feature/*\` or \`fix/*\` branches found._"
             else
               echo "| Branch | Status | Conflicting Files |"
@@ -190,14 +282,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Send silent notification (conflicts only)
-        if: >
-          steps.merge_check.outcome == 'success' &&
-          steps.merge_check.outputs.conflict_count != '0'
+        if: steps.aggregate.outputs.conflict_count != '0'
         run: |
-          CONFLICT_COUNT="${{ steps.merge_check.outputs.conflict_count }}"
-          TOTAL="${{ steps.branches.outputs.count }}"
+          CONFLICT_COUNT="${{ steps.aggregate.outputs.conflict_count }}"
+          TOTAL="${{ steps.aggregate.outputs.total }}"
           CONFLICT_BRANCHES=$(jq -r \
-            '[.[] | select(.status == "conflicts") | .branch] | join(", ")' \
+            '[.[] | select(.status == "conflict") | .branch] | join(", ")' \
             /tmp/merge-results.json)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
