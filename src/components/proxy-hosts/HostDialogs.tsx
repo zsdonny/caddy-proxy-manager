@@ -136,7 +136,12 @@ export function CreateHostDialog({
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
-                <GeoBlockFields />
+                <GeoBlockFields
+                    initialValues={initialData ? {
+                        geoblock: initialData.geoblock,
+                        geoblock_mode: initialData.geoblock_mode,
+                    } : undefined}
+                />
                 <WafFields value={initialData?.waf} />
                 <MtlsFields value={initialData?.mtls} caCertificates={caCertificates} />
             </Stack>
