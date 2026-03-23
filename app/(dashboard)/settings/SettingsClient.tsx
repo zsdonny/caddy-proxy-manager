@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import {
+  Cloud, Globe, Globe2, KeyRound, Network, Pin, Activity,
+  ScrollText, Settings2, UserCheck, MapPin,
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatusChip } from "@/components/ui/StatusChip";
 import type {
   GeneralSettings,
   AuthentikSettings,
@@ -11,8 +22,8 @@ import type {
   DnsSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
-} from "@/src/lib/settings";
-import { GeoBlockFields } from "@/src/components/proxy-hosts/GeoBlockFields";
+} from "@/lib/settings";
+import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
@@ -29,6 +40,86 @@ import {
   syncSlaveInstancesAction,
   updateGeoBlockSettingsAction,
 } from "./actions";
+import { ReactNode } from "react";
+
+// ─── Alert helpers ────────────────────────────────────────────────────────────
+
+function StatusAlert({ message, success }: { message: string; success: boolean }) {
+  return (
+    <Alert variant={success ? "default" : "destructive"}>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
+  );
+}
+
+function InfoAlert({ children }: { children: ReactNode }) {
+  return (
+    <Alert className="border-blue-500/30 bg-blue-500/5 text-blue-700 dark:text-blue-400 [&>svg]:text-blue-500">
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
+  );
+}
+
+function WarnAlert({ children }: { children: ReactNode }) {
+  return (
+    <Alert className="border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500">
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
+  );
+}
+
+// ─── Section card ─────────────────────────────────────────────────────────────
+
+type AccentConfig = { border: string; icon: string };
+
+function SettingSection({
+  icon,
+  title,
+  description,
+  accent,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  description?: string;
+  accent: AccentConfig;
+  children: ReactNode;
+}) {
+  return (
+    <Card className={`border-l-2 ${accent.border}`}>
+      <CardContent className="flex flex-col gap-4 px-5 pt-5 pb-5">
+        <div className="flex items-start gap-3">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${accent.icon}`}>
+            {icon}
+          </div>
+          <div>
+            <h2 className="text-base font-semibold leading-tight">{title}</h2>
+            {description && (
+              <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+            )}
+          </div>
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Accents ──────────────────────────────────────────────────────────────────
+
+const A: Record<string, AccentConfig> = {
+  sync:       { border: "border-l-violet-500",  icon: "border-violet-500/30 bg-violet-500/10 text-violet-500"  },
+  general:    { border: "border-l-zinc-400",     icon: "border-zinc-500/30 bg-zinc-500/10 text-zinc-500"        },
+  cloudflare: { border: "border-l-orange-500",   icon: "border-orange-500/30 bg-orange-500/10 text-orange-500" },
+  dns:        { border: "border-l-cyan-500",     icon: "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"        },
+  upstreamDns:{ border: "border-l-emerald-500",  icon: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500" },
+  authentik:  { border: "border-l-purple-500",   icon: "border-purple-500/30 bg-purple-500/10 text-purple-500" },
+  metrics:    { border: "border-l-rose-500",     icon: "border-rose-500/30 bg-rose-500/10 text-rose-500"        },
+  logging:    { border: "border-l-amber-500",    icon: "border-amber-500/30 bg-amber-500/10 text-amber-500"     },
+  geoblock:   { border: "border-l-teal-500",     icon: "border-teal-500/30 bg-teal-500/10 text-teal-500"        },
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
   general: GeneralSettings | null;
@@ -78,6 +169,8 @@ type Props = {
   };
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function SettingsClient({
   general,
   cloudflare,
@@ -96,8 +189,7 @@ export default function SettingsClient({
   const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
   const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
   const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useFormState(
-    updateUpstreamDnsResolutionSettingsAction,
-    null
+    updateUpstreamDnsResolutionSettingsAction, null
   );
   const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
   const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
@@ -118,666 +210,649 @@ export default function SettingsClient({
   );
 
   return (
-    <Stack spacing={4} sx={{ width: "100%" }}>
-      <Stack spacing={1}>
-        <Typography variant="h4" fontWeight={600}>
-          Settings
-        </Typography>
-        <Typography color="text.secondary">Configure organization-wide defaults and DNS automation.</Typography>
-      </Stack>
+    <div className="flex flex-col gap-6 w-full">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">Configure organization-wide defaults and DNS automation.</p>
+      </div>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Instance Sync
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Choose whether this instance acts independently, pushes configuration to slave nodes, or pulls configuration from a master.
-          </Typography>
-          <Stack component="form" action={instanceModeFormAction} spacing={2}>
-            {instanceSync.modeFromEnv && (
-              <Alert severity="info">
-                Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime.
-              </Alert>
-            )}
-            {instanceModeState?.message && (
-              <Alert severity={instanceModeState.success ? "success" : "error"}>
-                {instanceModeState.message}
-              </Alert>
-            )}
-            <TextField
-              name="mode"
-              label="Instance mode"
-              select
-              defaultValue={instanceSync.mode}
-              disabled={instanceSync.modeFromEnv}
-              fullWidth
-            >
-              <MenuItem value="standalone">Standalone</MenuItem>
-              <MenuItem value="master">Master</MenuItem>
-              <MenuItem value="slave">Slave</MenuItem>
-            </TextField>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained" disabled={instanceSync.modeFromEnv}>
-                Save instance mode
-              </Button>
-            </Box>
-          </Stack>
+      {/* ── Instance Sync ── */}
+      <SettingSection
+        icon={<Network className="h-4 w-4" />}
+        title="Instance Sync"
+        description="Choose whether this instance acts independently, pushes configuration to slave nodes, or pulls configuration from a master."
+        accent={A.sync}
+      >
+        <form action={instanceModeFormAction} className="flex flex-col gap-3">
+          {instanceSync.modeFromEnv && (
+            <InfoAlert>
+              Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime.
+            </InfoAlert>
+          )}
+          {instanceModeState?.message && (
+            <StatusAlert message={instanceModeState.message} success={instanceModeState.success} />
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="instance-mode">Instance mode</Label>
+            <Select name="mode" defaultValue={instanceSync.mode} disabled={instanceSync.modeFromEnv}>
+              <SelectTrigger id="instance-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standalone">Standalone</SelectItem>
+                <SelectItem value="master">Master</SelectItem>
+                <SelectItem value="slave">Slave</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={instanceSync.modeFromEnv}>
+              Save instance mode
+            </Button>
+          </div>
+        </form>
 
-          {isSlave && (
-            <Stack spacing={2} sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                Master Connection
-              </Typography>
-              <Stack component="form" action={slaveTokenFormAction} spacing={2}>
-                {instanceSync.tokenFromEnv && (
-                  <Alert severity="info">
-                    Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime.
-                  </Alert>
-                )}
-                {slaveTokenState?.message && (
-                  <Alert severity={slaveTokenState.success ? "success" : "error"}>
-                    {slaveTokenState.message}
-                  </Alert>
-                )}
-                {instanceSync.slave?.hasToken && !instanceSync.tokenFromEnv && (
-                  <Alert severity="info">
-                    A master sync token is configured. Leave the token field blank to keep it, or select "Remove existing token" to delete it.
-                  </Alert>
-                )}
-                <TextField
+        {isSlave && (
+          <div className="flex flex-col gap-3 mt-1">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Master Connection</h3>
+            <form action={slaveTokenFormAction} className="flex flex-col gap-3">
+              {instanceSync.tokenFromEnv && (
+                <InfoAlert>
+                  Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime.
+                </InfoAlert>
+              )}
+              {slaveTokenState?.message && (
+                <StatusAlert message={slaveTokenState.message} success={slaveTokenState.success} />
+              )}
+              {instanceSync.slave?.hasToken && !instanceSync.tokenFromEnv && (
+                <InfoAlert>
+                  A master sync token is configured. Leave the token field blank to keep it, or select &ldquo;Remove existing token&rdquo; to delete it.
+                </InfoAlert>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="masterToken">Master sync token</Label>
+                <Input
+                  id="masterToken"
                   name="masterToken"
-                  label="Master sync token"
                   type="password"
                   autoComplete="new-password"
                   placeholder="Enter new token"
                   disabled={instanceSync.tokenFromEnv}
-                  fullWidth
                 />
-                <FormControlLabel
-                  control={<Checkbox name="clearToken" />}
-                  label="Remove existing token"
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="clearToken"
+                  name="clearToken"
                   disabled={!instanceSync.slave?.hasToken || instanceSync.tokenFromEnv}
                 />
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button type="submit" variant="contained" disabled={instanceSync.tokenFromEnv}>
-                    Save master token
-                  </Button>
-                </Box>
-              </Stack>
-              <Alert severity={instanceSync.slave?.lastSyncError ? "warning" : "info"}>
+                <Label htmlFor="clearToken">Remove existing token</Label>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={instanceSync.tokenFromEnv}>
+                  Save master token
+                </Button>
+              </div>
+            </form>
+            {instanceSync.slave?.lastSyncError ? (
+              <WarnAlert>
                 {instanceSync.slave?.lastSyncAt
-                  ? `Last sync: ${instanceSync.slave.lastSyncAt}${instanceSync.slave.lastSyncError ? ` (${instanceSync.slave.lastSyncError})` : ""}`
+                  ? `Last sync: ${instanceSync.slave.lastSyncAt} (${instanceSync.slave.lastSyncError})`
                   : "No sync payload has been received yet."}
-              </Alert>
-            </Stack>
-          )}
-
-          {isMaster && (
-            <Stack spacing={2} sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                Slave Instances
-              </Typography>
-              <Stack component="form" action={slaveInstanceFormAction} spacing={2}>
-                {slaveInstanceState?.message && (
-                  <Alert severity={slaveInstanceState.success ? "success" : "error"}>
-                    {slaveInstanceState.message}
-                  </Alert>
-                )}
-                <TextField name="name" label="Instance name" placeholder="Edge node EU-1" fullWidth />
-                <TextField name="baseUrl" label="Base URL" placeholder="https://slave-1.example.com" fullWidth />
-                <TextField name="apiToken" label="Slave API token" type="password" autoComplete="new-password" fullWidth />
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button type="submit" variant="contained">
-                    Add slave instance
-                  </Button>
-                </Box>
-              </Stack>
-
-              <Stack component="form" action={syncFormAction} spacing={2}>
-                {syncState?.message && (
-                  <Alert severity={syncState.success ? "success" : "warning"}>
-                    {syncState.message}
-                  </Alert>
-                )}
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button type="submit" variant="outlined">
-                    Sync now
-                  </Button>
-                </Box>
-              </Stack>
-
-              {instanceSync.master?.instances.length === 0 && instanceSync.master?.envInstances.length === 0 && (
-                <Alert severity="info">No slave instances configured yet.</Alert>
-              )}
-
-              {instanceSync.master?.envInstances && instanceSync.master.envInstances.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
-                    Environment-configured instances (via INSTANCE_SLAVES)
-                  </Typography>
-                  {instanceSync.master.envInstances.map((instance, index) => (
-                    <Box
-                      key={`env-${index}`}
-                      sx={{
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 2,
-                        p: 2,
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 2,
-                        bgcolor: "action.hover"
-                      }}
-                    >
-                      <Box>
-                        <Typography fontWeight={600}>{instance.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {instance.url}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Configured via environment variable
-                        </Typography>
-                      </Box>
-                    </Box>
-                  ))}
-                </>
-              )}
-
-              {instanceSync.master?.instances && instanceSync.master.instances.length > 0 && (
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
-                  UI-configured instances
-                </Typography>
-              )}
-              {instanceSync.master?.instances.map((instance) => (
-                <Box
-                  key={instance.id}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 2,
-                    p: 2,
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 2
-                  }}
-                >
-                  <Box>
-                    <Typography fontWeight={600}>{instance.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {instance.base_url}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {instance.last_sync_at ? `Last sync: ${instance.last_sync_at}` : "No sync yet"}
-                    </Typography>
-                    {instance.last_sync_error && (
-                      <Typography variant="caption" color="error" display="block">
-                        {instance.last_sync_error}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    <Box component="form" action={toggleSlaveInstanceAction}>
-                      <input type="hidden" name="instanceId" value={instance.id} />
-                      <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
-                      <Button type="submit" variant="outlined" color={instance.enabled ? "warning" : "success"}>
-                        {instance.enabled ? "Disable" : "Enable"}
-                      </Button>
-                    </Box>
-                    <Box component="form" action={deleteSlaveInstanceAction}>
-                      <input type="hidden" name="instanceId" value={instance.id} />
-                      <Button type="submit" variant="outlined" color="error">
-                        Remove
-                      </Button>
-                    </Box>
-                  </Stack>
-                </Box>
-              ))}
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            General
-          </Typography>
-          <Stack component="form" action={generalFormAction} spacing={2}>
-            {generalState?.message && (
-              <Alert severity={generalState.success ? "success" : "error"}>
-                {generalState.message}
-              </Alert>
+              </WarnAlert>
+            ) : (
+              <InfoAlert>
+                {instanceSync.slave?.lastSyncAt
+                  ? `Last sync: ${instanceSync.slave.lastSyncAt}`
+                  : "No sync payload has been received yet."}
+              </InfoAlert>
             )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={generalOverride}
-                    onChange={(event) => setGeneralOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+          </div>
+        )}
+
+        {isMaster && (
+          <div className="flex flex-col gap-3 mt-1">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Slave Instances</h3>
+            <form action={slaveInstanceFormAction} className="flex flex-col gap-3">
+              {slaveInstanceState?.message && (
+                <StatusAlert message={slaveInstanceState.message} success={slaveInstanceState.success} />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="inst-name">Instance name</Label>
+                  <Input id="inst-name" name="name" placeholder="Edge node EU-1" className="h-8 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="inst-base-url">Base URL</Label>
+                  <Input id="inst-base-url" name="baseUrl" placeholder="https://slave-1.example.com" className="h-8 text-sm" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="inst-api-token">Slave API token</Label>
+                <Input id="inst-api-token" name="apiToken" type="password" autoComplete="new-password" className="h-8 text-sm" />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <form action={syncFormAction}>
+                  {syncState?.message && (
+                    <StatusAlert message={syncState.message} success={syncState.success} />
+                  )}
+                  <Button type="submit" variant="outline" size="sm">Sync now</Button>
+                </form>
+                <Button type="submit">Add slave instance</Button>
+              </div>
+            </form>
+
+            {instanceSync.master?.instances.length === 0 && instanceSync.master?.envInstances.length === 0 && (
+              <InfoAlert>No slave instances configured yet.</InfoAlert>
+            )}
+
+            {instanceSync.master?.envInstances && instanceSync.master.envInstances.length > 0 && (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">
+                  Environment-configured (INSTANCE_SLAVES)
+                </p>
+                {instanceSync.master.envInstances.map((instance, index) => (
+                  <div
+                    key={`env-${index}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">{instance.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{instance.url}</p>
+                    </div>
+                    <StatusChip status="active" label="ENV" />
+                  </div>
+                ))}
+              </>
+            )}
+
+            {instanceSync.master?.instances && instanceSync.master.instances.length > 0 && (
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">UI-configured instances</p>
+            )}
+            {instanceSync.master?.instances.map((instance) => (
+              <div
+                key={instance.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{instance.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{instance.base_url}</p>
+                  <span className="text-xs text-muted-foreground">
+                    {instance.last_sync_at ? `Last sync: ${instance.last_sync_at}` : "No sync yet"}
+                  </span>
+                  {instance.last_sync_error && (
+                    <span className="block text-xs text-destructive">{instance.last_sync_error}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <form action={toggleSlaveInstanceAction}>
+                    <input type="hidden" name="instanceId" value={instance.id} />
+                    <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
+                    <Button type="submit" variant="outline" size="sm" className={instance.enabled ? "text-amber-600 border-amber-500/50" : "text-emerald-600 border-emerald-500/50"}>
+                      {instance.enabled ? "Disable" : "Enable"}
+                    </Button>
+                  </form>
+                  <form action={deleteSlaveInstanceAction}>
+                    <input type="hidden" name="instanceId" value={instance.id} />
+                    <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/50">
+                      Remove
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SettingSection>
+
+      {/* ── General ── */}
+      <SettingSection
+        icon={<Settings2 className="h-4 w-4" />}
+        title="General"
+        accent={A.general}
+      >
+        <form action={generalFormAction} className="flex flex-col gap-3">
+          {generalState?.message && (
+            <StatusAlert message={generalState.message} success={generalState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="general-override"
+                name="overrideEnabled"
+                checked={generalOverride}
+                onCheckedChange={(v) => setGeneralOverride(!!v)}
               />
-            )}
-            <TextField
-              name="primaryDomain"
-              label="Primary domain"
-              defaultValue={general?.primaryDomain ?? "caddyproxymanager.com"}
-              required
-              disabled={isSlave && !generalOverride}
-              fullWidth
-            />
-            <TextField
-              name="acmeEmail"
-              label="ACME contact email"
-              type="email"
-              defaultValue={general?.acmeEmail ?? ""}
-              disabled={isSlave && !generalOverride}
-              fullWidth
-            />
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save general settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Cloudflare DNS
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Configure a Cloudflare API token with Zone.DNS Edit permissions to enable DNS-01 challenges for wildcard certificates.
-          </Typography>
-          {cloudflare.hasToken && (
-            <Alert severity="info">
-              A Cloudflare API token is already configured. Leave the token field blank to keep it, or select “Remove existing token” to delete it.
-            </Alert>
+              <Label htmlFor="general-override">Override master settings</Label>
+            </div>
           )}
-          <Stack component="form" action={cloudflareFormAction} spacing={2}>
-            {cloudflareState?.message && (
-              <Alert severity={cloudflareState.success ? "success" : "warning"}>
-                {cloudflareState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={cloudflareOverride}
-                    onChange={(event) => setCloudflareOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="primaryDomain">Primary domain</Label>
+              <Input
+                id="primaryDomain"
+                name="primaryDomain"
+                defaultValue={general?.primaryDomain ?? "caddyproxymanager.com"}
+                required
+                disabled={isSlave && !generalOverride}
+                className="h-8 text-sm font-mono"
               />
-            )}
-            <TextField
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="acmeEmail">ACME contact email</Label>
+              <Input
+                id="acmeEmail"
+                name="acmeEmail"
+                type="email"
+                defaultValue={general?.acmeEmail ?? ""}
+                disabled={isSlave && !generalOverride}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save general settings</Button>
+          </div>
+        </form>
+      </SettingSection>
+
+      {/* ── Cloudflare DNS ── */}
+      <SettingSection
+        icon={<Cloud className="h-4 w-4" />}
+        title="Cloudflare DNS"
+        description="Configure a Cloudflare API token with Zone.DNS Edit permissions to enable DNS-01 challenges for wildcard certificates."
+        accent={A.cloudflare}
+      >
+        {cloudflare.hasToken && (
+          <InfoAlert>
+            A Cloudflare API token is already configured. Leave the token field blank to keep it, or select &ldquo;Remove existing token&rdquo; to delete it.
+          </InfoAlert>
+        )}
+        <form action={cloudflareFormAction} className="flex flex-col gap-3">
+          {cloudflareState?.message && (
+            <StatusAlert message={cloudflareState.message} success={cloudflareState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="cloudflare-override"
+                name="overrideEnabled"
+                checked={cloudflareOverride}
+                onCheckedChange={(v) => setCloudflareOverride(!!v)}
+              />
+              <Label htmlFor="cloudflare-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cf-apiToken">API token</Label>
+            <Input
+              id="cf-apiToken"
               name="apiToken"
-              label="API token"
               type="password"
               autoComplete="new-password"
               placeholder="Enter new token"
               disabled={isSlave && !cloudflareOverride}
-              fullWidth
+              className="h-8 text-sm"
             />
-            <FormControlLabel
-              control={<Checkbox name="clearToken" />}
-              label="Remove existing token"
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="cf-clearToken"
+              name="clearToken"
               disabled={!cloudflare.hasToken || (isSlave && !cloudflareOverride)}
             />
-            <TextField name="zoneId" label="Zone ID" defaultValue={cloudflare.zoneId ?? ""} disabled={isSlave && !cloudflareOverride} fullWidth />
-            <TextField name="accountId" label="Account ID" defaultValue={cloudflare.accountId ?? ""} disabled={isSlave && !cloudflareOverride} fullWidth />
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save Cloudflare settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            <Label htmlFor="cf-clearToken">Remove existing token</Label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cf-zoneId">Zone ID</Label>
+              <Input id="cf-zoneId" name="zoneId" defaultValue={cloudflare.zoneId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cf-accountId">Account ID</Label>
+              <Input id="cf-accountId" name="accountId" defaultValue={cloudflare.accountId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save Cloudflare settings</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            DNS Resolvers
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Configure custom DNS resolvers for ACME DNS-01 challenges. These resolvers will be used to verify DNS records during certificate issuance.
-          </Typography>
-          <Stack component="form" action={dnsFormAction} spacing={2}>
-            {dnsState?.message && (
-              <Alert severity={dnsState.success ? "success" : "error"}>
-                {dnsState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={dnsOverride}
-                    onChange={(event) => setDnsOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+      {/* ── DNS Resolvers ── */}
+      <SettingSection
+        icon={<Globe className="h-4 w-4" />}
+        title="DNS Resolvers"
+        description="Configure custom DNS resolvers for ACME DNS-01 challenges. These resolvers will be used to verify DNS records during certificate issuance."
+        accent={A.dns}
+      >
+        <form action={dnsFormAction} className="flex flex-col gap-3">
+          {dnsState?.message && (
+            <StatusAlert message={dnsState.message} success={dnsState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="dns-override"
+                name="overrideEnabled"
+                checked={dnsOverride}
+                onCheckedChange={(v) => setDnsOverride(!!v)}
               />
-            )}
-            <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={dns?.enabled ?? false} disabled={isSlave && !dnsOverride} />}
-              label="Enable custom DNS resolvers"
-            />
-            <TextField
-              name="resolvers"
-              label="Primary DNS Resolvers"
-              placeholder="1.1.1.1&#10;8.8.8.8"
-              defaultValue={dns?.resolvers?.join("\n") ?? ""}
-              helperText="One resolver per line (e.g., 1.1.1.1, 8.8.8.8). Used for ACME DNS verification."
-              multiline
-              minRows={2}
+              <Label htmlFor="dns-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="dns-enabled"
+              name="enabled"
+              defaultChecked={dns?.enabled ?? false}
               disabled={isSlave && !dnsOverride}
-              fullWidth
             />
-            <TextField
-              name="fallbacks"
-              label="Fallback DNS Resolvers (Optional)"
-              placeholder="8.8.4.4&#10;1.0.0.1"
-              defaultValue={dns?.fallbacks?.join("\n") ?? ""}
-              helperText="Fallback resolvers if primary fails. One per line."
-              multiline
-              minRows={2}
-              disabled={isSlave && !dnsOverride}
-              fullWidth
-            />
-            <TextField
+            <Label htmlFor="dns-enabled">Enable custom DNS resolvers</Label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dns-resolvers" className="text-xs">Primary resolvers</Label>
+              <textarea
+                id="dns-resolvers"
+                name="resolvers"
+                placeholder={"1.1.1.1\n8.8.8.8"}
+                defaultValue={dns?.resolvers?.join("\n") ?? ""}
+                rows={2}
+                disabled={isSlave && !dnsOverride}
+                className="flex min-h-[56px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dns-fallbacks" className="text-xs">Fallback resolvers</Label>
+              <textarea
+                id="dns-fallbacks"
+                name="fallbacks"
+                placeholder={"8.8.4.4\n1.0.0.1"}
+                defaultValue={dns?.fallbacks?.join("\n") ?? ""}
+                rows={2}
+                disabled={isSlave && !dnsOverride}
+                className="flex min-h-[56px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dns-timeout" className="text-xs">Query timeout</Label>
+            <Input
+              id="dns-timeout"
               name="timeout"
-              label="DNS Query Timeout"
               placeholder="5s"
               defaultValue={dns?.timeout ?? ""}
-              helperText="Timeout for DNS queries (e.g., 5s, 10s)"
               disabled={isSlave && !dnsOverride}
-              fullWidth
+              className="h-8 text-sm w-32"
             />
-            <Alert severity="info">
-              Custom DNS resolvers are useful when your DNS provider has slow propagation or when using split-horizon DNS.
-              Common public resolvers: 1.1.1.1 (Cloudflare), 8.8.8.8 (Google), 9.9.9.9 (Quad9).
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save DNS settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            <p className="text-xs text-muted-foreground">e.g. 5s, 10s</p>
+          </div>
+          <InfoAlert>
+            Custom DNS resolvers are useful when your DNS provider has slow propagation or when using split-horizon DNS.
+            Common public resolvers: 1.1.1.1 (Cloudflare), 8.8.8.8 (Google), 9.9.9.9 (Quad9).
+          </InfoAlert>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save DNS settings</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Upstream DNS Pinning
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Optionally resolve upstream hostnames when applying config and pin reverse proxy upstream dials to IP addresses.
-            This can avoid runtime DNS churn and lets you force IPv6, IPv4, or both (IPv6 preferred).
-          </Typography>
-          <Stack component="form" action={upstreamDnsResolutionFormAction} spacing={2}>
-            {upstreamDnsResolutionState?.message && (
-              <Alert severity={upstreamDnsResolutionState.success ? "success" : "error"}>
-                {upstreamDnsResolutionState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={upstreamDnsResolutionOverride}
-                    onChange={(event) => setUpstreamDnsResolutionOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+      {/* ── Upstream DNS Pinning ── */}
+      <SettingSection
+        icon={<Pin className="h-4 w-4" />}
+        title="Upstream DNS Pinning"
+        description="Optionally resolve upstream hostnames at config apply time and pin reverse proxy dials to IP addresses. Avoids runtime DNS churn and lets you force IPv6, IPv4, or both."
+        accent={A.upstreamDns}
+      >
+        <form action={upstreamDnsResolutionFormAction} className="flex flex-col gap-3">
+          {upstreamDnsResolutionState?.message && (
+            <StatusAlert message={upstreamDnsResolutionState.message} success={upstreamDnsResolutionState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="udns-override"
+                name="overrideEnabled"
+                checked={upstreamDnsResolutionOverride}
+                onCheckedChange={(v) => setUpstreamDnsResolutionOverride(!!v)}
               />
-            )}
-            <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={upstreamDnsResolution?.enabled ?? false} disabled={isSlave && !upstreamDnsResolutionOverride} />}
-              label="Enable upstream DNS pinning during config apply"
-            />
-            <TextField
-              name="family"
-              label="Address Family Preference"
-              select
-              defaultValue={upstreamDnsResolution?.family ?? "both"}
-              helperText="Both resolves AAAA + A with IPv6 preferred ordering."
+              <Label htmlFor="udns-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="udns-enabled"
+              name="enabled"
+              defaultChecked={upstreamDnsResolution?.enabled ?? false}
               disabled={isSlave && !upstreamDnsResolutionOverride}
-              fullWidth
+            />
+            <Label htmlFor="udns-enabled">Enable upstream DNS pinning during config apply</Label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="udns-family">Address family preference</Label>
+            <Select
+              name="family"
+              defaultValue={upstreamDnsResolution?.family ?? "both"}
+              disabled={isSlave && !upstreamDnsResolutionOverride}
             >
-              <MenuItem value="both">Both (Prefer IPv6)</MenuItem>
-              <MenuItem value="ipv6">IPv6 only</MenuItem>
-              <MenuItem value="ipv4">IPv4 only</MenuItem>
-            </TextField>
-            <Alert severity="info">
-              Host-level settings can override this default. Resolution happens at config save/reload time and resolved IPs are written into
-              Caddy's active config. If one handler has multiple different HTTPS upstream hostnames, HTTPS pinning is skipped for those
-              HTTPS upstreams to avoid SNI mismatch.
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save upstream DNS pinning settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+              <SelectTrigger id="udns-family" className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="both">Both (Prefer IPv6)</SelectItem>
+                <SelectItem value="ipv6">IPv6 only</SelectItem>
+                <SelectItem value="ipv4">IPv4 only</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Both resolves AAAA + A with IPv6 preferred ordering.</p>
+          </div>
+          <InfoAlert>
+            Host-level settings can override this default. Resolution happens at config save/reload time and resolved IPs are written into
+            Caddy&apos;s active config. If one handler has multiple different HTTPS upstream hostnames, HTTPS pinning is skipped for those
+            HTTPS upstreams to avoid SNI mismatch.
+          </InfoAlert>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save upstream DNS pinning settings</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Authentik Defaults
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Set default Authentik forward authentication values. These will be pre-filled when creating new proxy hosts but can be customized per host.
-          </Typography>
-          <Stack component="form" action={authentikFormAction} spacing={2}>
-            {authentikState?.message && (
-              <Alert severity={authentikState.success ? "success" : "error"}>
-                {authentikState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={authentikOverride}
-                    onChange={(event) => setAuthentikOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+      {/* ── Authentik Defaults ── */}
+      <SettingSection
+        icon={<UserCheck className="h-4 w-4" />}
+        title="Authentik Defaults"
+        description="Set default Authentik forward authentication values. These will be pre-filled when creating new proxy hosts but can be customized per host."
+        accent={A.authentik}
+      >
+        <form action={authentikFormAction} className="flex flex-col gap-3">
+          {authentikState?.message && (
+            <StatusAlert message={authentikState.message} success={authentikState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="authentik-override"
+                name="overrideEnabled"
+                checked={authentikOverride}
+                onCheckedChange={(v) => setAuthentikOverride(!!v)}
               />
-            )}
-            <TextField
-              name="outpostDomain"
-              label="Outpost Domain"
-              placeholder="outpost.goauthentik.io"
-              defaultValue={authentik?.outpostDomain ?? ""}
-              helperText="Authentik outpost domain"
-              required
-              disabled={isSlave && !authentikOverride}
-              fullWidth
-            />
-            <TextField
-              name="outpostUpstream"
-              label="Outpost Upstream"
-              placeholder="http://authentik-server:9000"
-              defaultValue={authentik?.outpostUpstream ?? ""}
-              helperText="Internal URL of Authentik outpost"
-              required
-              disabled={isSlave && !authentikOverride}
-              fullWidth
-            />
-            <TextField
+              <Label htmlFor="authentik-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="outpostDomain">Outpost domain</Label>
+              <Input
+                id="outpostDomain"
+                name="outpostDomain"
+                placeholder="outpost.goauthentik.io"
+                defaultValue={authentik?.outpostDomain ?? ""}
+                required
+                disabled={isSlave && !authentikOverride}
+                className="h-8 text-sm font-mono"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="outpostUpstream">Outpost upstream</Label>
+              <Input
+                id="outpostUpstream"
+                name="outpostUpstream"
+                placeholder="http://authentik-server:9000"
+                defaultValue={authentik?.outpostUpstream ?? ""}
+                required
+                disabled={isSlave && !authentikOverride}
+                className="h-8 text-sm font-mono"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="authEndpoint">Auth endpoint</Label>
+            <Input
+              id="authEndpoint"
               name="authEndpoint"
-              label="Authpost Endpoint"
               placeholder="/outpost.goauthentik.io/auth/caddy"
               defaultValue={authentik?.authEndpoint ?? ""}
-              helperText="Authpost endpoint path"
               disabled={isSlave && !authentikOverride}
-              fullWidth
+              className="h-8 text-sm font-mono"
             />
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save Authentik defaults
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save Authentik defaults</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Metrics & Monitoring
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Enable Caddy metrics exposure for monitoring with Prometheus, Grafana, or other observability tools.
-            Metrics will be available at http://caddy:{metrics?.port ?? 9090}/metrics on a separate port (NOT the admin API port for security).
-          </Typography>
-          <Stack component="form" action={metricsFormAction} spacing={2}>
-            {metricsState?.message && (
-              <Alert severity={metricsState.success ? "success" : "warning"}>
-                {metricsState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={metricsOverride}
-                    onChange={(event) => setMetricsOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+      {/* ── Metrics & Monitoring ── */}
+      <SettingSection
+        icon={<Activity className="h-4 w-4" />}
+        title="Metrics & Monitoring"
+        description={`Enable Caddy metrics exposure for Prometheus, Grafana, or other observability tools. Metrics will be available at http://caddy:${metrics?.port ?? 9090}/metrics on a dedicated port.`}
+        accent={A.metrics}
+      >
+        <form action={metricsFormAction} className="flex flex-col gap-3">
+          {metricsState?.message && (
+            <StatusAlert message={metricsState.message} success={metricsState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="metrics-override"
+                name="overrideEnabled"
+                checked={metricsOverride}
+                onCheckedChange={(v) => setMetricsOverride(!!v)}
               />
-            )}
-            <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={metrics?.enabled ?? false} disabled={isSlave && !metricsOverride} />}
-              label="Enable metrics endpoint"
+              <Label htmlFor="metrics-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="metrics-enabled"
+              name="enabled"
+              defaultChecked={metrics?.enabled ?? false}
+              disabled={isSlave && !metricsOverride}
             />
-            <TextField
+            <Label htmlFor="metrics-enabled">Enable metrics endpoint</Label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="metrics-port">Metrics port</Label>
+            <Input
+              id="metrics-port"
               name="port"
-              label="Metrics Port"
               type="number"
               defaultValue={metrics?.port ?? 9090}
-              helperText="Port to expose metrics on (default: 9090, separate from admin API on 2019)"
               disabled={isSlave && !metricsOverride}
-              fullWidth
+              className="h-8 text-sm w-32 font-mono"
             />
-            <Alert severity="info">
-              After enabling metrics, configure your monitoring tool to scrape http://caddy-proxy-manager-caddy:{metrics?.port ?? 9090}/metrics from within the Docker network.
-              To expose metrics externally, add a port mapping like "{metrics?.port ?? 9090}:{metrics?.port ?? 9090}" in docker-compose.yml.
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save metrics settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            <p className="text-xs text-muted-foreground">Separate from admin API on port 2019.</p>
+          </div>
+          <InfoAlert>
+            After enabling metrics, configure your monitoring tool to scrape http://caddy-proxy-manager-caddy:{metrics?.port ?? 9090}/metrics from within the Docker network.
+            To expose metrics externally, add a port mapping like &ldquo;{metrics?.port ?? 9090}:{metrics?.port ?? 9090}&rdquo; in docker-compose.yml.
+          </InfoAlert>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save metrics settings</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Access Logging
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Enable HTTP access logging to track all requests going through your proxy hosts.
-            Logs will be stored in the caddy-logs directory and mounted at /logs/access.log inside the container.
-          </Typography>
-          <Stack component="form" action={loggingFormAction} spacing={2}>
-            {loggingState?.message && (
-              <Alert severity={loggingState.success ? "success" : "warning"}>
-                {loggingState.message}
-              </Alert>
-            )}
-            {isSlave && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="overrideEnabled"
-                    checked={loggingOverride}
-                    onChange={(event) => setLoggingOverride(event.target.checked)}
-                  />
-                }
-                label="Override master settings"
+      {/* ── Access Logging ── */}
+      <SettingSection
+        icon={<ScrollText className="h-4 w-4" />}
+        title="Access Logging"
+        description="Enable HTTP access logging to track all requests going through your proxy hosts. Logs are stored in the caddy-logs directory."
+        accent={A.logging}
+      >
+        <form action={loggingFormAction} className="flex flex-col gap-3">
+          {loggingState?.message && (
+            <StatusAlert message={loggingState.message} success={loggingState.success} />
+          )}
+          {isSlave && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="logging-override"
+                name="overrideEnabled"
+                checked={loggingOverride}
+                onCheckedChange={(v) => setLoggingOverride(!!v)}
               />
-            )}
-            <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={logging?.enabled ?? false} disabled={isSlave && !loggingOverride} />}
-              label="Enable access logging"
-            />
-            <TextField
-              name="format"
-              label="Log Format"
-              select
-              defaultValue={logging?.format ?? "json"}
-              helperText="Format for access logs"
+              <Label htmlFor="logging-override">Override master settings</Label>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="logging-enabled"
+              name="enabled"
+              defaultChecked={logging?.enabled ?? false}
               disabled={isSlave && !loggingOverride}
-              fullWidth
-            >
-              <MenuItem value="json">JSON</MenuItem>
-              <MenuItem value="console">Console (Common Log Format)</MenuItem>
-            </TextField>
-            <Alert severity="info">
-              Access logs are stored in the caddy-logs Docker volume.
-              You can view them with: docker exec caddy-proxy-manager-caddy tail -f /logs/access.log
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save logging settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Global Geoblocking
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Configure default geoblocking rules applied to all proxy hosts. Per-host rules can merge with or override these global defaults.
-          </Typography>
-          <Stack component="form" action={geoBlockFormAction} spacing={2}>
-            {geoBlockState?.message && (
-              <Alert severity={geoBlockState.success ? "success" : "error"}>
-                {geoBlockState.message}
-              </Alert>
-            )}
-            <GeoBlockFields
-              initialValues={{ geoblock: globalGeoBlock ?? null, geoblock_mode: "merge" }}
-              showModeSelector={false}
             />
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save geoblocking settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            <Label htmlFor="logging-enabled">Enable access logging</Label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="logging-format">Log format</Label>
+            <Select
+              name="format"
+              defaultValue={logging?.format ?? "json"}
+              disabled={isSlave && !loggingOverride}
+            >
+              <SelectTrigger id="logging-format" className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="json">JSON</SelectItem>
+                <SelectItem value="console">Console (Common Log Format)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <InfoAlert>
+            Access logs are stored in the caddy-logs Docker volume.
+            View with: <code className="text-xs font-mono">docker exec caddy-proxy-manager-caddy tail -f /logs/access.log</code>
+          </InfoAlert>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save logging settings</Button>
+          </div>
+        </form>
+      </SettingSection>
 
-    </Stack>
+      {/* ── Global Geoblocking ── */}
+      <SettingSection
+        icon={<MapPin className="h-4 w-4" />}
+        title="Global Geoblocking"
+        description="Configure default geoblocking rules applied to all proxy hosts. Per-host rules can merge with or override these global defaults."
+        accent={A.geoblock}
+      >
+        <form action={geoBlockFormAction} className="flex flex-col gap-3">
+          {geoBlockState?.message && (
+            <StatusAlert message={geoBlockState.message} success={geoBlockState.success} />
+          )}
+          <GeoBlockFields
+            initialValues={{ geoblock: globalGeoBlock ?? null, geoblock_mode: "merge" }}
+            showModeSelector={false}
+          />
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save geoblocking settings</Button>
+          </div>
+        </form>
+      </SettingSection>
+    </div>
   );
 }

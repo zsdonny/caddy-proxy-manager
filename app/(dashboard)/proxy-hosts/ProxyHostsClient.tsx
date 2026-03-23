@@ -2,20 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Card, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import type { AccessList } from "@/src/lib/models/access-lists";
-import type { Certificate } from "@/src/lib/models/certificates";
-import type { ProxyHost } from "@/src/lib/models/proxy-hosts";
-import type { CaCertificate } from "@/src/lib/models/ca-certificates";
-import type { AuthentikSettings } from "@/src/lib/settings";
+import { Globe, MoreHorizontal, ArrowRight, Shield } from "lucide-react";
+import type { AccessList } from "@/lib/models/access-lists";
+import type { Certificate } from "@/lib/models/certificates";
+import type { ProxyHost } from "@/lib/models/proxy-hosts";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
+import type { AuthentikSettings } from "@/lib/settings";
 import { toggleProxyHostAction } from "./actions";
-import { PageHeader } from "@/src/components/ui/PageHeader";
-import { SearchField } from "@/src/components/ui/SearchField";
-import { DataTable } from "@/src/components/ui/DataTable";
-import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/src/components/proxy-hosts/HostDialogs";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchField } from "@/components/ui/SearchField";
+import { DataTable } from "@/components/ui/DataTable";
+import { StatusChip } from "@/components/ui/StatusChip";
+import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/components/proxy-hosts/HostDialogs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   hosts: ProxyHost[];
@@ -25,9 +34,10 @@ type Props = {
   authentikDefaults: AuthentikSettings | null;
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
+  initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
@@ -65,131 +75,168 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
   const columns = [
     {
       id: "name",
-      label: "Name",
+      label: "Name / Domain",
+      sortKey: "name",
       render: (host: ProxyHost) => (
-        <Stack>
-          <Typography variant="body2" fontWeight={600}>
-            {host.name}
-          </Typography>
-        </Stack>
-      )
+        <div className="flex items-start gap-3">
+          <div className={[
+            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            host.enabled
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+              : "border-zinc-500/20 bg-zinc-500/10 text-zinc-400"
+          ].join(" ")}>
+            <Globe className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-tight">{host.name}</p>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+              {host.domains[0]}
+              {host.domains.length > 1 && (
+                <span className="ml-1 text-muted-foreground">+{host.domains.length - 1}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      ),
     },
     {
-      id: "domains",
-      label: "Domains",
+      id: "target",
+      label: "Upstream",
+      sortKey: "upstreams",
       render: (host: ProxyHost) => (
-        <Stack>
-          <Typography variant="body2" color="text.secondary">
-            {host.domains[0]}
-            {host.domains.length > 1 && ` +${host.domains.length - 1} more`}
-          </Typography>
-        </Stack>
-      )
+        <div className="flex items-center gap-1.5">
+          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="text-sm font-mono font-medium text-foreground/80">
+            {host.upstreams[0]}
+            {host.upstreams.length > 1 && (
+              <span className="ml-1 text-muted-foreground">+{host.upstreams.length - 1}</span>
+            )}
+          </span>
+        </div>
+      ),
     },
     {
-      id: "upstreams",
-      label: "Target",
+      id: "features",
+      label: "Features",
       render: (host: ProxyHost) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-          {host.upstreams[0]}
-          {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
-        </Typography>
-      )
+        <div className="flex flex-wrap gap-1">
+          {host.certificate_id && (
+            <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>
+          )}
+          {host.access_list_id && (
+            <Badge variant="warning" className="text-[10px] px-1.5 py-0">
+              <Shield className="h-2.5 w-2.5 mr-0.5" />Auth
+            </Badge>
+          )}
+          {!host.certificate_id && !host.access_list_id && (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      label: "Status",
+      sortKey: "enabled",
+      width: 110,
+      render: (host: ProxyHost) => (
+        <StatusChip status={host.enabled ? "active" : "inactive"} />
+      ),
     },
     {
       id: "actions",
-      label: "Actions",
+      label: "",
       align: "right" as const,
-      width: 150,
+      width: 80,
       render: (host: ProxyHost) => (
-        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+        <div className="flex items-center gap-2 justify-end">
           <Switch
             checked={host.enabled}
-            onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-            size="small"
-            color="success"
+            onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
-          <Tooltip title="Duplicate">
-            <IconButton
-              size="small"
-              onClick={() => {
-                setDuplicateHost(host);
-                setCreateOpen(true);
-              }}
-              color="info"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => setEditHost(host)} color="primary">
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => setDeleteHost(host)} color="error">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      )
-    }
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteHost(host)}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
   ];
 
   const mobileCard = (host: ProxyHost) => (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="subtitle2" fontWeight={700}>
-            {host.name}
-          </Typography>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+    <Card className={[
+      "border-l-2",
+      host.enabled ? "border-l-emerald-500" : "border-l-zinc-500/30",
+    ].join(" ")}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{host.name}</p>
+            <p className="text-xs text-muted-foreground font-mono truncate">
+              {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""}
+              <span className="mx-1 text-muted-foreground">→</span>
+              {host.upstreams[0]}
+            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <StatusChip status={host.enabled ? "active" : "inactive"} />
+              {host.certificate_id && <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
             <Switch
               checked={host.enabled}
-              onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-              size="small"
-              color="success"
+              onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
             />
-            <Tooltip title="Duplicate">
-              <IconButton size="small" onClick={() => { setDuplicateHost(host); setCreateOpen(true); }} color="info">
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Edit">
-              <IconButton size="small" aria-label="Edit" onClick={() => setEditHost(host)} color="primary">
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton size="small" aria-label="Delete" onClick={() => setDeleteHost(host)} color="error">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-          {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""} → {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
-        </Typography>
-      </Stack>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteHost(host)}>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 
   return (
-    <Stack spacing={4}>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Proxy Hosts"
         description="Define HTTP(S) reverse proxies orchestrated by Caddy with automated certificates."
-        action={{
-          label: "Create Host",
-          onClick: () => setCreateOpen(true)
-        }}
+        action={{ label: "Create Host", onClick: () => setCreateOpen(true) }}
       />
 
-      <SearchField
-        value={searchTerm}
-        onChange={(e) => handleSearchChange(e.target.value)}
-        placeholder="Search hosts..."
-      />
+      <div className="flex items-center gap-2">
+        <SearchField
+          value={searchTerm}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search hosts..."
+        />
+      </div>
 
       <DataTable
         columns={columns}
@@ -197,16 +244,14 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         keyField="id"
         emptyMessage={searchTerm ? "No hosts match your search" : "No proxy hosts found"}
         pagination={pagination}
+        sort={initialSort}
         mobileCard={mobileCard}
+        rowClassName={(host) => host.enabled ? "" : "opacity-75"}
       />
 
       <CreateHostDialog
         open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          // Clear duplicate host after dialog transition
-          setTimeout(() => setDuplicateHost(null), 200);
-        }}
+        onClose={() => { setCreateOpen(false); setTimeout(() => setDuplicateHost(null), 200); }}
         initialData={duplicateHost}
         certificates={certificates}
         accessLists={accessLists}
@@ -232,6 +277,6 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           onClose={() => setDeleteHost(null)}
         />
       )}
-    </Stack>
+    </div>
   );
 }

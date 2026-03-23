@@ -1,22 +1,23 @@
 "use client";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/DataTable";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Chip,
-  IconButton,
-  Menu,
-  MenuItem,
-  Stack,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
-  Typography,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AlertTriangle, FileKey, MoreVertical, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
-import { DataTable } from "@/src/components/ui/DataTable";
 import { deleteCertificateAction } from "../actions";
 import type { ImportedCertView, ManagedCertView } from "../page";
 import { RelativeTime } from "./RelativeTime";
@@ -33,75 +34,93 @@ function DomainsCell({ domains }: { domains: string[] }) {
   const visible = domains.slice(0, 2);
   const rest = domains.slice(2);
   return (
-    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+    <div className="flex flex-wrap gap-1">
       {visible.map((d) => (
-        <Chip key={d} label={d} size="small" variant="outlined" />
+        <Badge key={d} variant="info" className="text-[10px] px-1.5 py-0 font-mono">{d}</Badge>
       ))}
       {rest.length > 0 && (
-        <Tooltip title={rest.join(", ")}>
-          <Chip label={`+${rest.length} more`} size="small" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-default">+{rest.length}</Badge>
+          </TooltipTrigger>
+          <TooltipContent>{rest.join(", ")}</TooltipContent>
         </Tooltip>
       )}
-    </Stack>
+    </div>
   );
 }
 
 function ActionsMenu({ cert, onEdit }: { cert: ImportedCertView; onEdit: () => void }) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleDelete() {
     startTransition(async () => {
       await deleteCertificateAction(cert.id);
-      setAnchor(null);
+      setOpen(false);
     });
   }
 
   return (
-    <>
-      <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
-      <Menu
-        anchorEl={anchor}
-        open={Boolean(anchor)}
-        onClose={() => { setAnchor(null); setConfirmDelete(false); }}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        <MenuItem onClick={() => { setAnchor(null); onEdit(); }}>Edit</MenuItem>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setConfirmDelete(false);
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => { setOpen(false); onEdit(); }}>Edit</DropdownMenuItem>
         {confirmDelete ? (
-          <MenuItem
-            sx={{ color: "error.main" }}
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
             disabled={isPending}
             onClick={handleDelete}
           >
             {isPending ? "Deleting..." : "Confirm Delete"}
-          </MenuItem>
+          </DropdownMenuItem>
         ) : (
-          <MenuItem sx={{ color: "error.main" }} onClick={() => setConfirmDelete(true)}>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
             Delete
-          </MenuItem>
+          </DropdownMenuItem>
         )}
-      </Menu>
-    </>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function importedMobileCard(c: ImportedCertView, onEdit: () => void) {
   return (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={0.5}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="subtitle2" fontWeight={700}>{c.name}</Typography>
+    <Card className={[
+      "border-l-2",
+      c.expiryStatus === "expired" ? "border-l-rose-500"
+        : c.expiryStatus === "expiring_soon" ? "border-l-amber-500"
+        : "border-l-emerald-500",
+    ].join(" ")}>
+      <CardContent className="p-4 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-500">
+              <FileKey className="h-3.5 w-3.5" />
+            </div>
+            <span className="text-sm font-semibold">{c.name}</span>
+          </div>
           <ActionsMenu cert={c} onEdit={onEdit} />
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
-          {c.domains.slice(0, 2).join(", ")}{c.domains.length > 2 ? ` +${c.domains.length - 2} more` : ""}
-        </Typography>
+        </div>
+        <p className="text-xs text-muted-foreground font-mono">
+          {c.domains.slice(0, 2).join(", ")}{c.domains.length > 2 ? ` +${c.domains.length - 2}` : ""}
+        </p>
         <RelativeTime validTo={c.validTo} status={c.expiryStatus} />
-      </Stack>
+      </CardContent>
     </Card>
   );
 }
@@ -126,7 +145,21 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
     {
       id: "name",
       label: "Name",
-      render: (c: ImportedCertView) => <Typography fontWeight={600}>{c.name}</Typography>,
+      render: (c: ImportedCertView) => (
+        <div className="flex items-start gap-3">
+          <div className={[
+            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            c.expiryStatus === "expired"
+              ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
+              : c.expiryStatus === "expiring_soon"
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
+          ].join(" ")}>
+            <FileKey className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm font-semibold">{c.name}</span>
+        </div>
+      ),
     },
     {
       id: "domains",
@@ -143,15 +176,13 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
       label: "Used by",
       render: (c: ImportedCertView) =>
         c.usedBy.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            —
-          </Typography>
+          <span className="text-sm text-muted-foreground">—</span>
         ) : (
-          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+          <div className="flex flex-wrap gap-1">
             {c.usedBy.map((h) => (
-              <Chip key={h.id} label={h.name} size="small" variant="outlined" />
+              <Badge key={h.id} variant="secondary" className="text-[10px] px-1.5 py-0">{h.name}</Badge>
             ))}
-          </Stack>
+          </div>
         ),
     },
     {
@@ -165,18 +196,13 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
   ];
 
   return (
-    <Stack spacing={2}>
-      {/* Add button */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-        <Button
-          startIcon={<AddIcon />}
-          variant="outlined"
-          size="small"
-          onClick={() => setDrawerCert(null)}
-        >
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => setDrawerCert(null)}>
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
           Import Certificate
         </Button>
-      </Box>
+      </div>
 
       <DataTable
         columns={columns}
@@ -184,17 +210,24 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
         keyField="id"
         emptyMessage="No imported certificates match"
         mobileCard={mobileCardRenderer}
+        rowClassName={(c) =>
+          c.expiryStatus === "expired" ? "opacity-70"
+            : c.expiryStatus === "expiring_soon" ? "bg-amber-500/5"
+            : ""
+        }
       />
 
-      {/* Legacy managed certs */}
       {managedCerts.length > 0 && (
-        <Stack spacing={1}>
-          <Alert severity="warning">
-            Legacy &quot;managed&quot; certificate entries detected. These are redundant — Caddy handles
-            HTTPS automatically. Consider deleting them.
+        <div className="flex flex-col gap-2">
+          <Alert className="border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Legacy &quot;managed&quot; certificate entries detected. These are redundant — Caddy handles
+              HTTPS automatically. Consider deleting them.
+            </AlertDescription>
           </Alert>
           <LegacyManagedTable managedCerts={managedCerts} />
-        </Stack>
+        </div>
       )}
 
       <ImportCertDrawer
@@ -202,7 +235,7 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
         cert={drawerCert || null}
         onClose={() => setDrawerCert(false)}
       />
-    </Stack>
+    </div>
   );
 }
 
@@ -214,18 +247,14 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       id: "name",
       label: "Name",
       render: (c: ManagedCertView) => (
-        <Typography variant="body2" fontWeight={600}>
-          {c.name}
-        </Typography>
+        <span className="text-sm font-semibold">{c.name}</span>
       ),
     },
     {
       id: "domains",
       label: "Domains",
       render: (c: ManagedCertView) => (
-        <Typography variant="body2" color="text.secondary">
-          {c.domain_names.join(", ")}
-        </Typography>
+        <p className="text-sm text-muted-foreground font-mono">{c.domain_names.join(", ")}</p>
       ),
     },
     {
@@ -234,9 +263,9 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       align: "right" as const,
       render: (c: ManagedCertView) => (
         <Button
-          size="small"
-          variant="outlined"
-          color="error"
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs border-destructive/50 text-destructive hover:bg-destructive/10"
           disabled={isPending}
           onClick={() => startTransition(async () => { await deleteCertificateAction(c.id); })}
         >

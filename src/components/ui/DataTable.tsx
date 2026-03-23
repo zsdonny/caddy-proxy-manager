@@ -1,20 +1,17 @@
 "use client";
 
 import {
-  Box,
-  Card,
-  Pagination,
-  Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
+} from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -23,6 +20,7 @@ export type Column<T> = {
   label: string;
   align?: "left" | "right" | "center";
   width?: string | number;
+  sortKey?: string;
   render?: (row: T) => ReactNode;
 };
 
@@ -33,12 +31,13 @@ type DataTableProps<T> = {
   emptyMessage?: string;
   loading?: boolean;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
   pagination?: {
     total: number;
     page: number;
     perPage: number;
   };
-  /** If provided, renders this instead of the table on xs/sm screens */
+  sort?: { sortBy: string; sortDir: "asc" | "desc" };
   mobileCard?: (row: T) => ReactNode;
 };
 
@@ -50,22 +49,137 @@ function PaginationBar({ page, perPage, total }: { page: number; perPage: number
 
   if (pageCount <= 1) return null;
 
-  function handlePageChange(_: React.ChangeEvent<unknown>, newPage: number) {
+  function goTo(newPage: number) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(newPage));
     router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-      <Pagination
-        count={pageCount}
-        page={page}
-        onChange={handlePageChange}
-        color="primary"
-        shape="rounded"
-      />
-    </Box>
+    <div className="flex items-center justify-center gap-2 mt-4">
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => goTo(page - 1)}
+        disabled={page <= 1}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {page} of {pageCount}
+      </span>
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => goTo(page + 1)}
+        disabled={page >= pageCount}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function SortableHeader({ col, sort }: { col: Column<unknown>; sort?: { sortBy: string; sortDir: "asc" | "desc" } }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (!col.sortKey) return <>{col.label}</>;
+
+  const isActive = sort?.sortBy === col.sortKey;
+  const nextDir = isActive && sort?.sortDir === "asc" ? "desc" : "asc";
+
+  function handleSort() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("sortBy", col.sortKey!);
+    params.set("sortDir", nextDir);
+    params.set("page", "1");
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium" onClick={handleSort}>
+      {col.label}
+      {isActive ? (
+        sort?.sortDir === "asc" ? <ArrowUp className="ml-1 h-3.5 w-3.5" /> : <ArrowDown className="ml-1 h-3.5 w-3.5" />
+      ) : (
+        <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-50" />
+      )}
+    </Button>
+  );
+}
+
+function DesktopTable<T>({
+  columns, data, keyField, emptyMessage, onRowClick, rowClassName, isEmpty, loading, sort,
+}: {
+  columns: Column<T>[];
+  data: T[];
+  keyField: keyof T;
+  emptyMessage: string;
+  onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
+  isEmpty: boolean;
+  loading?: boolean;
+  sort?: { sortBy: string; sortDir: "asc" | "desc" };
+}) {
+  return (
+    <div className="rounded-md border bg-card overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((col) => (
+              <TableHead
+                key={col.id}
+                style={{ width: col.width }}
+                className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+              >
+                <SortableHeader col={col as Column<unknown>} sort={sort} />
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                {columns.map((col) => (
+                  <TableCell key={col.id}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : isEmpty ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : (
+            data.map((row) => (
+              <TableRow
+                key={String(row[keyField])}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={[
+                  onRowClick ? "cursor-pointer hover:bg-muted/50" : "",
+                  rowClassName ? rowClassName(row) : "",
+                ].filter(Boolean).join(" ")}
+              >
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.id}
+                    className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+                  >
+                    {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -76,79 +190,60 @@ export function DataTable<T>({
   emptyMessage = "No data available",
   loading = false,
   onRowClick,
+  rowClassName,
   pagination,
+  sort,
   mobileCard,
 }: DataTableProps<T>) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
   const isEmpty = data.length === 0 && !loading;
 
-  if (isMobile && mobileCard) {
+  if (mobileCard) {
     return (
-      <Box>
-        {isEmpty ? (
-          <Card variant="outlined" sx={{ py: 6, textAlign: "center" }}>
-            <Typography color="text.secondary">{emptyMessage}</Typography>
-          </Card>
-        ) : (
-          <Stack spacing={1.5}>
-            {data.map((row) => (
-              <Box key={String(row[keyField])}>
-                {mobileCard(row)}
-              </Box>
-            ))}
-          </Stack>
-        )}
-        {pagination && <PaginationBar {...pagination} />}
-      </Box>
+      <div>
+        <div className="block md:hidden">
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i}><CardContent className="py-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+              ))}
+            </div>
+          ) : isEmpty ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                {emptyMessage}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {data.map((row) => (
+                <div key={String(row[keyField])}>{mobileCard(row)}</div>
+              ))}
+            </div>
+          )}
+          {pagination && <PaginationBar {...pagination} />}
+        </div>
+        <div className="hidden md:block">
+          <DesktopTable
+            columns={columns} data={data} keyField={keyField}
+            emptyMessage={emptyMessage} onRowClick={onRowClick}
+            rowClassName={rowClassName}
+            isEmpty={isEmpty} loading={loading} sort={sort}
+          />
+          {pagination && <PaginationBar {...pagination} />}
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box>
-      <TableContainer component={Card} variant="outlined" sx={{ overflowX: "auto" }}>
-        <Table sx={{ minWidth: 600 }}>
-          <TableHead>
-            <TableRow>
-              {columns.map((col) => (
-                <TableCell
-                  key={col.id}
-                  align={col.align || "left"}
-                  width={col.width}
-                >
-                  {col.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isEmpty ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
-                  <Typography color="text.secondary">{emptyMessage}</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row) => (
-                <TableRow
-                  key={String(row[keyField])}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  sx={onRowClick ? { cursor: "pointer", "&:hover": { bgcolor: "action.hover" } } : undefined}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.id} align={col.align || "left"}>
-                      {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
+    <div>
+      <DesktopTable
+        columns={columns} data={data} keyField={keyField}
+        emptyMessage={emptyMessage} onRowClick={onRowClick}
+        rowClassName={rowClassName}
+        isEmpty={isEmpty} loading={loading}
+      />
       {pagination && <PaginationBar {...pagination} />}
-    </Box>
+    </div>
   );
 }
