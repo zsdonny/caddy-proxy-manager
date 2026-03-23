@@ -1,21 +1,19 @@
+export const dynamic = 'force-dynamic';
+
 import db, { toIso } from "@/src/lib/db";
 import { requireAdmin } from "@/src/lib/auth";
 import OverviewClient from "./OverviewClient";
 import {
-
-export const dynamic = 'force-dynamic';
   accessLists,
   auditEvents,
   certificates,
-  proxyHosts
+  proxyHosts,
 } from "@/src/lib/db/schema";
 import { count, desc, isNull, sql } from "drizzle-orm";
 import { ArrowLeftRight, ShieldCheck, KeyRound } from "lucide-react";
 import { ReactNode } from "react";
 import { getAnalyticsSummary } from "@/src/lib/analytics-db";
 
-
-export const dynamic = 'force-dynamic';
 type StatCard = {
   label: string;
   icon: ReactNode;
