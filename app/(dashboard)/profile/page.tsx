@@ -1,11 +1,10 @@
+export const dynamic = 'force-dynamic';
+
 import { requireUser } from "@/src/lib/auth";
 import { getUserById } from "@/src/lib/models/user";
 import { getEnabledOAuthProviders } from "@/src/lib/config";
 import ProfileClient from "./ProfileClient";
 import { redirect } from "next/navigation";
-
-
-export const dynamic = 'force-dynamic';
 export default async function ProfilePage() {
   const session = await requireUser();
 

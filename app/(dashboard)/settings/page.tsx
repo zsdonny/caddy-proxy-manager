@@ -1,11 +1,10 @@
+export const dynamic = 'force-dynamic';
+
 import SettingsClient from "./SettingsClient";
 import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getRetentionSettings } from "@/src/lib/settings";
 import { getInstanceMode, getReplicaLastSync, getPrimaryToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvReplicaInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { requireAdmin } from "@/src/lib/auth";
-
-
-export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   await requireAdmin();
 

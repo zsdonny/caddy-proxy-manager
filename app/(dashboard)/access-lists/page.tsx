@@ -1,9 +1,8 @@
+export const dynamic = 'force-dynamic';
+
 import AccessListsClient from "./AccessListsClient";
 import { listAccessListsPaginated, countAccessLists } from "@/src/lib/models/access-lists";
 import { requireAdmin } from "@/src/lib/auth";
-
-
-export const dynamic = 'force-dynamic';
 const PER_PAGE = 25;
 
 interface PageProps {

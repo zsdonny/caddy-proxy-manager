@@ -1,8 +1,7 @@
+export const dynamic = 'force-dynamic';
+
 import { requireUser } from '@/src/lib/auth';
 import AnalyticsClient from './AnalyticsClient';
-
-
-export const dynamic = 'force-dynamic';
 export default async function AnalyticsPage() {
   await requireUser();
   return <AnalyticsClient />;
