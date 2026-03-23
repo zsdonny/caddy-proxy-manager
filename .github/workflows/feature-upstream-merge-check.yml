@@ -9,8 +9,8 @@ name: Feature/Fix Branch — Upstream Merge Check
 # ● Each check job writes a mini summary showing which files conflict (if any)
 # ● report job writes the aggregate summary table + Copilot Analysis
 # ● Silent Pushover notification (priority=-1) sent ONLY when ≥1 conflict found
-# ● GitHub Models gpt-4o-mini (free tier — no Copilot Pro quota consumed) classifies each
-#   conflicting file as `fork-exclusive`, `clash`, or `superseded` — using per-file diffs as evidence
+# ● GitHub Models gpt-4o-mini classifies each conflicting file as `fork-exclusive`, `clash`,
+#   or `superseded` — using per-file diffs as evidence; API errors fall back gracefully
 #
 # Requires Git 2.38+ for `git merge-tree --write-tree` (ubuntu-latest ships Git 2.43+)
 
@@ -218,7 +218,7 @@ jobs:
           echo "clean_count=$CLEAN_COUNT" >> "$GITHUB_OUTPUT"
           echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
 
-      - name: Classify conflicts with GitHub Models (gpt-4o-mini — free tier)
+      - name: Classify conflicts
         id: ai
         if: steps.aggregate.outputs.conflict_count != '0'
         env:
@@ -262,7 +262,7 @@ jobs:
               "temperature": 0.2
             }')
 
-          RESPONSE=$(curl -s --fail-with-body \
+          RESPONSE=$(curl -s \
             -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
