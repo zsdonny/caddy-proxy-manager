@@ -1,10 +1,26 @@
 name: Sync caddy-blocker-plugin
 
+# Checks fuomag9/caddy-blocker-plugin for new commits and opens a PR if the
+# vendored copy in docker/caddy/plugins/caddy-blocker-plugin/ is out of date.
+#
+# ● Hourly lightweight SHA check via GitHub REST API (1 request/run)
+# ● On change: clones plugin + upstream caddy-proxy-manager, generates per-file
+#   diffs for critical plugin files and fork integration files
+# ● GPT-4o-mini (GitHub Models free tier) classifies each changed file as
+#   safe / review / breaking relative to the fork's integration points
+# ● Opens a PR with diffs, Copilot Analysis, and review checklist embedded
+
 on:
   schedule:
-    # Weekly on Monday at 06:00 UTC
-    - cron: '0 6 * * 1'
+    - cron: '0 * * * *'   # Hourly
   workflow_dispatch:
+
+env:
+  PLUGIN_REPO: fuomag9/caddy-blocker-plugin
+  PLUGIN_BRANCH: main
+  UPSTREAM_REPO: fuomag9/caddy-proxy-manager
+  UPSTREAM_BRANCH: develop
+  VENDORED_DIR: docker/caddy/plugins/caddy-blocker-plugin
 
 jobs:
   sync:
@@ -12,23 +28,39 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      models: read
 
     steps:
+      # ── 1. Checkout fork ──────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: develop
 
-      - name: Fetch upstream source
+      # ── 2. Lightweight SHA check (single API call) ────────────────
+      - name: Fetch upstream SHA via API
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git clone --depth 1 https://github.com/fuomag9/caddy-blocker-plugin /tmp/caddy-blocker-upstream
-          UPSTREAM_SHA=$(git -C /tmp/caddy-blocker-upstream rev-parse HEAD)
+          UPSTREAM_SHA=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${PLUGIN_REPO}/commits/${PLUGIN_BRANCH}" \
+            | jq -r '.sha')
+
+          if [ -z "$UPSTREAM_SHA" ] || [ "$UPSTREAM_SHA" = "null" ]; then
+            echo "::error::Failed to fetch upstream SHA from ${PLUGIN_REPO}"
+            exit 1
+          fi
+
           echo "UPSTREAM_SHA=${UPSTREAM_SHA}" >> "$GITHUB_ENV"
+          echo "sha=${UPSTREAM_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Read stored SHA
         id: stored
         run: |
-          STORED_SHA=$(cat docker/caddy/plugins/caddy-blocker-plugin/.upstream-sha 2>/dev/null || echo "")
+          STORED_SHA=$(cat "${VENDORED_DIR}/.upstream-sha" 2>/dev/null || echo "")
           echo "STORED_SHA=${STORED_SHA}" >> "$GITHUB_ENV"
           echo "sha=${STORED_SHA}" >> "$GITHUB_OUTPUT"
 
@@ -36,25 +68,271 @@ jobs:
         id: diff
         run: |
           if [ "$UPSTREAM_SHA" = "$STORED_SHA" ]; then
-            echo "No changes detected (upstream SHA unchanged: ${UPSTREAM_SHA})"
+            echo "No changes detected (SHA: ${UPSTREAM_SHA})"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "Change detected: stored=${STORED_SHA} upstream=${UPSTREAM_SHA}"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Update vendored copy
+      # ── 3. Summary for no-change runs ─────────────────────────────
+      - name: Write no-change summary
+        if: steps.diff.outputs.changed == 'false'
+        run: |
+          {
+            echo "## Caddy Blocker Plugin Sync"
+            echo ""
+            echo "**$(date -u '+%Y-%m-%d %H:%M UTC')** — No changes detected."
+            echo ""
+            echo "Upstream \`${PLUGIN_REPO}@${PLUGIN_BRANCH}\` SHA: \`${UPSTREAM_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 4. Clone upstream sources (only on change) ────────────────
+      - name: Clone upstream plugin and caddy-proxy-manager
         if: steps.diff.outputs.changed == 'true'
         run: |
-          # Remove all files except .git-related files under the plugin dir
-          find docker/caddy/plugins/caddy-blocker-plugin -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+          git clone --depth 1 "https://github.com/${PLUGIN_REPO}.git" /tmp/caddy-blocker-upstream
+          git clone --depth 1 --branch "${UPSTREAM_BRANCH}" \
+            "https://github.com/${UPSTREAM_REPO}.git" /tmp/caddy-proxy-manager-upstream
 
-          # Copy upstream files (excluding .git directory)
-          rsync -a --exclude='.git' /tmp/caddy-blocker-upstream/ docker/caddy/plugins/caddy-blocker-plugin/
+      # ── 5. Update vendored copy ───────────────────────────────────
+      - name: Sync vendored files
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          # Wipe existing vendored files
+          find "${VENDORED_DIR}" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
 
-          # Write new upstream SHA
-          echo -n "${UPSTREAM_SHA}" > docker/caddy/plugins/caddy-blocker-plugin/.upstream-sha
+          # Copy upstream (excluding .git)
+          rsync -a --exclude='.git' /tmp/caddy-blocker-upstream/ "${VENDORED_DIR}/"
 
+          # Write new SHA
+          echo -n "${UPSTREAM_SHA}" > "${VENDORED_DIR}/.upstream-sha"
+
+      # ── 6. Inject vendoring attribution banner ────────────────────
+      - name: Inject README attribution banner
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          README="${VENDORED_DIR}/README.md"
+          if [ -f "$README" ]; then
+            BANNER=$(cat <<'BANNER_EOF'
+          > [!NOTE]
+          > **Vendored copy** of [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin).
+          > Kept in sync by the [Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/sync-caddy-blocker.yml) workflow.
+          BANNER_EOF
+          )
+            # Add SHA line separately to interpolate the variable
+            BANNER="${BANNER}
+          > Upstream SHA: \`${UPSTREAM_SHA}\` — Do not edit files in this directory manually."
+
+            # Prepend banner + blank line before existing content
+            printf '%s\n\n%s\n' "$BANNER" "$(cat "$README")" > "$README"
+          fi
+
+      # ── 7. Generate diffs for PR body ─────────────────────────────
+      - name: Generate integration diffs
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_BODY="/tmp/pr-body.md"
+          COMPARE_URL="https://github.com/${PLUGIN_REPO}/compare/${STORED_SHA}...${UPSTREAM_SHA}"
+
+          {
+            echo "## Automated sync of \`caddy-blocker-plugin\`"
+            echo ""
+            echo "Upstream repo: [${PLUGIN_REPO}](https://github.com/${PLUGIN_REPO})"
+            echo ""
+            echo "| | SHA |"
+            echo "|---|---|"
+            echo "| **Upstream HEAD** | [\`${UPSTREAM_SHA:0:7}\`](https://github.com/${PLUGIN_REPO}/commit/${UPSTREAM_SHA}) |"
+            echo "| **Previous** | \`${STORED_SHA:0:7}\` |"
+            echo ""
+          } > "$PR_BODY"
+
+          # ── Plugin file diffs (upstream old → new) ──
+          if [ -z "$STORED_SHA" ]; then
+            echo "_Initial sync — no previous SHA to compare against._" >> "$PR_BODY"
+          else
+            echo "### Upstream plugin diff ([full compare](${COMPARE_URL}))" >> "$PR_BODY"
+            echo "" >> "$PR_BODY"
+
+            COMPARE_JSON=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${PLUGIN_REPO}/compare/${STORED_SHA}...${UPSTREAM_SHA}" || echo "")
+
+            if [ -z "$COMPARE_JSON" ]; then
+              {
+                echo "> [!WARNING]"
+                echo "> Could not fetch diff from GitHub API — upstream may have force-pushed."
+                echo ""
+              } >> "$PR_BODY"
+            else
+              for file in blocker.go core.go main.go go.mod l4_matcher.go; do
+                patch=$(echo "$COMPARE_JSON" | jq -r --arg f "$file" \
+                  '.files[] | select(.filename == $f) | .patch // empty')
+                if [ -n "$patch" ]; then
+                  {
+                    echo "<details>"
+                    echo "<summary><strong><code>${file}</code></strong></summary>"
+                    echo ""
+                    echo '```diff'
+                    echo "$patch" | head -n 150
+                    echo '```'
+                    echo ""
+                    echo "</details>"
+                    echo ""
+                  } >> "$PR_BODY"
+                else
+                  echo "- \`${file}\`: _no changes_" >> "$PR_BODY"
+                fi
+              done
+            fi
+          fi
+
+          # ── Fork integration file diffs (fork vs upstream caddy-proxy-manager) ──
+          echo "" >> "$PR_BODY"
+          echo "### Fork integration file comparison" >> "$PR_BODY"
+          echo "" >> "$PR_BODY"
+          echo "_Diff between this fork's \`develop\` and upstream \`${UPSTREAM_REPO}@${UPSTREAM_BRANCH}\` for files that consume the blocker plugin:_" >> "$PR_BODY"
+          echo "" >> "$PR_BODY"
+
+          for file in src/lib/caddy.ts src/lib/log-parser.ts; do
+            if [ -f "$file" ] && [ -f "/tmp/caddy-proxy-manager-upstream/${file}" ]; then
+              FDIFF=$(diff -u "/tmp/caddy-proxy-manager-upstream/${file}" "$file" \
+                --label "upstream/${file}" --label "fork/${file}" 2>/dev/null | head -n 150 || true)
+              if [ -n "$FDIFF" ]; then
+                {
+                  echo "<details>"
+                  echo "<summary><strong><code>${file}</code></strong> — diverges from upstream</summary>"
+                  echo ""
+                  echo '```diff'
+                  echo "$FDIFF"
+                  echo '```'
+                  echo ""
+                  echo "</details>"
+                  echo ""
+                } >> "$PR_BODY"
+              else
+                echo "- \`${file}\`: _identical to upstream_" >> "$PR_BODY"
+              fi
+            elif [ -f "$file" ]; then
+              echo "- \`${file}\`: _fork-exclusive (not in upstream)_" >> "$PR_BODY"
+            else
+              echo "- \`${file}\`: _missing from fork checkout_" >> "$PR_BODY"
+            fi
+          done
+
+          # Save the plugin diff JSON for the AI step
+          if [ -n "$COMPARE_JSON" ]; then
+            echo "$COMPARE_JSON" > /tmp/compare.json
+          fi
+
+      # ── 8. Copilot Analysis (GPT-4o-mini) ────────────────────────
+      - name: Copilot Analysis (gpt-4o-mini — free tier)
+        id: ai
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Build prompt with plugin file diffs
+          PROMPT_FILE="/tmp/ai-prompt.txt"
+          printf '' > "$PROMPT_FILE"
+
+          if [ -f /tmp/compare.json ]; then
+            for file in blocker.go core.go main.go go.mod l4_matcher.go; do
+              patch=$(jq -r --arg f "$file" \
+                '.files[] | select(.filename == $f) | .patch // empty' \
+                /tmp/compare.json 2>/dev/null)
+              if [ -n "$patch" ]; then
+                printf '**%s (plugin diff):**\n```diff\n%s\n```\n\n' "$file" "$(echo "$patch" | head -n 150)" >> "$PROMPT_FILE"
+              fi
+            done
+          fi
+
+          # Append fork integration file excerpts as context
+          {
+            echo "---"
+            echo ""
+            echo "**Fork integration files (for reference — these are NOT part of the plugin, they consume it):**"
+            echo ""
+            echo '**src/lib/caddy.ts — buildBlockerHandler():**'
+            echo '```typescript'
+            sed -n '/^function buildBlockerHandler/,/^}/p' src/lib/caddy.ts | head -n 40
+            echo '```'
+            echo ""
+            echo '**src/lib/log-parser.ts — collectBlockedSignatures():**'
+            echo '```typescript'
+            sed -n '/^export function collectBlockedSignatures/,/^}/p' src/lib/log-parser.ts | head -n 20
+            echo '```'
+          } >> "$PROMPT_FILE"
+
+          PROMPT_CONTENT=$(cat "$PROMPT_FILE")
+
+          # Skip AI if there are no diffs to analyze
+          if [ -z "$(cat "$PROMPT_FILE" | head -c 10)" ]; then
+            echo "No plugin diffs to analyze." > /tmp/ai-analysis.txt
+            exit 0
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg prompt "$PROMPT_CONTENT" \
+            '{
+              "model": "gpt-4o-mini",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a plugin-sync assistant for the fork zsdonny/caddy-proxy-manager-ex. This fork vendors fuomag9/caddy-blocker-plugin as a Caddy middleware. The fork consumes the plugin through two TypeScript files:\n\n1. `src/lib/caddy.ts` — `buildBlockerHandler()` builds Caddy JSON config. It relies on:\n   - Handler name: `\"handler\": \"blocker\"`\n   - Field names: `block_countries`, `block_continents`, `block_asns`, `block_cidrs`, `block_ips`, `allow_countries`, `allow_continents`, `allow_asns`, `allow_cidrs`, `allow_ips`, `trusted_proxies`, `fail_closed`, `response_status`, `response_body`, `response_headers`, `redirect_url`\n   - Database paths: `geoip_db`, `asn_db`\n\n2. `src/lib/log-parser.ts` — `collectBlockedSignatures()` detects blocker log entries matching:\n   - `entry.msg === \"request blocked\"`\n   - `entry.plugin === \"caddy-blocker\"`\n   - Extracts: `ts`, `client_ip`, `method`, `uri`\n\nYou are given the diff of changed plugin files (upstream old → new) and the current fork integration code as reference.\n\nFor each changed plugin file, classify it with ONE of these labels (wrap in backticks):\n- `safe` — no impact on the fork integration files. New features, dependency bumps, internal refactors, or test changes.\n- `review` — changes to field names, handler registration, config schema, or log fields that MAY affect integration. The fork integration files should be reviewed.\n- `breaking` — renamed or removed handler name, changed JSON field names consumed by the fork, altered log message format (`msg` or `plugin` values), or changed `go.mod` module path. The fork integration files MUST be updated before merging.\n\nBe concise: 1–2 sentences per file. End with a one-sentence action summary stating whether the sync is safe to merge as-is or requires fork changes first."
+                },
+                {
+                  "role": "user",
+                  "content": ("Classify each changed plugin file and assess integration impact:\n\n" + $prompt)
+                }
+              ],
+              "max_tokens": 2000,
+              "temperature": 0.2
+            }')
+
+          RESPONSE=$(curl -s --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            https://models.inference.ai.azure.com/chat/completions 2>&1) || true
+
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
+
+          if [ -n "$AI_TEXT" ]; then
+            printf '%s\n' "$AI_TEXT" > /tmp/ai-analysis.txt
+          else
+            echo "Copilot analysis unavailable (API error or empty response)." > /tmp/ai-analysis.txt
+          fi
+
+      # ── 9. Finalize PR body ───────────────────────────────────────
+      - name: Append Copilot Analysis and checklist to PR body
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          PR_BODY="/tmp/pr-body.md"
+
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Copilot Analysis"
+            echo ""
+            cat /tmp/ai-analysis.txt
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Review checklist"
+            echo "- [ ] Check Copilot Analysis above for \`breaking\` or \`review\` classifications"
+            echo "- [ ] If plugin handler name or field names changed → update \`src/lib/caddy.ts\`"
+            echo "- [ ] If log format (\`msg\` / \`plugin\` fields) changed → update \`src/lib/log-parser.ts\`"
+            echo "- [ ] Verify \`go.mod\` module path is still \`github.com/fuomag9/caddy-blocker-plugin\`"
+            echo "- [ ] Merging this PR will automatically trigger a Caddy image rebuild via \`docker-build-caddy.yml\`"
+          } >> "$PR_BODY"
+
+      # ── 10. Create PR ─────────────────────────────────────────────
       - name: Create pull request
         if: steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
@@ -67,20 +345,28 @@ jobs:
 
             Upstream commit: https://github.com/fuomag9/caddy-blocker-plugin/commit/${{ env.UPSTREAM_SHA }}
             Previous SHA: ${{ env.STORED_SHA }}
-          body: |
-            ## Automated sync of `caddy-blocker-plugin`
-
-            Upstream repo: [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin)
-
-            | | SHA |
-            |---|---|
-            | **Upstream HEAD** | [`${{ env.UPSTREAM_SHA }}`](https://github.com/fuomag9/caddy-blocker-plugin/commit/${{ env.UPSTREAM_SHA }}) |
-            | **Previous** | `${{ env.STORED_SHA }}` |
-
-            ### Review checklist
-            - [ ] Check the diff for breaking changes to `blocker.go` / `l4_matcher.go` that may require updates to `src/lib/caddy.ts` or `src/lib/log-parser.ts`
-            - [ ] Verify `go.mod` module path is still `github.com/fuomag9/caddy-blocker-plugin`
-            - [ ] Merging this PR will automatically trigger a Caddy image rebuild via `docker-build-caddy.yml`
+          body-path: /tmp/pr-body.md
           labels: |
             dependencies
             automated
+
+      # ── 11. Step summary (change detected) ────────────────────────
+      - name: Write sync summary
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          {
+            echo "## Caddy Blocker Plugin Sync"
+            echo ""
+            echo "**$(date -u '+%Y-%m-%d %H:%M UTC')** — Change detected, PR opened."
+            echo ""
+            echo "| | SHA |"
+            echo "|---|---|"
+            echo "| **Upstream HEAD** | [\`${UPSTREAM_SHA:0:7}\`](https://github.com/${PLUGIN_REPO}/commit/${UPSTREAM_SHA}) |"
+            echo "| **Previous** | \`${STORED_SHA:0:7}\` |"
+            echo ""
+            if [ -f /tmp/ai-analysis.txt ] && [ -s /tmp/ai-analysis.txt ]; then
+              echo "### Copilot Analysis"
+              echo ""
+              cat /tmp/ai-analysis.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
