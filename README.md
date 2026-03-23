@@ -21,15 +21,10 @@
 | Change | Description | Status |
 |--------|-------------|--------|
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
-| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest` | Fork-exclusive |
-| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
+| **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
-| **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them | Fork-exclusive |
-| **UI enhancements** | Config builder panels have distinct colored icons; host tables include a Features column with icon badges and a dropdown filter. | Fork-exclusive |
-| **Snappy UI** | Optimistic toggles give instant visual feedback; forms show spinners during submission; Caddy config reloads are deferred so the UI never blocks on Caddy; connection-error banner with automatic recovery detection. | Fork-exclusive |
-| **Primary/replica terminology** | Renamed all master/slave references to primary/replica throughout the UI, API, and env vars. `INSTANCE_SLAVES` still works as a deprecated fallback for `INSTANCE_REPLICAS`. Legacy `"master"`/`"slave"` values in the DB and env are silently mapped with a deprecation warning — no migration needed. | In progress (`feature/instance-sync-improvements`) |
-| **Replica sync cache fix** | After a replica receives a sync payload from the primary, `revalidatePath` is called so the replica's UI immediately reflects the updated configuration without a manual page reload. | In progress (`fix/replica-sync-revalidate`) |
-| **Replica sync-status polling** | The settings page on a replica polls `/api/instances/sync-status` every 15 seconds and automatically refreshes the page with a toast notification when a new sync is detected. | In progress (`feature/instance-sync-improvements`) |
+| **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
+| **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI | Fork-exclusive |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
