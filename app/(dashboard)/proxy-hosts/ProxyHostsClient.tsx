@@ -252,8 +252,6 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
     } catch {
       toast.error("Failed to toggle host");
       setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
-    } finally {
-      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
     }
   };
 

@@ -213,7 +213,6 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
       toast.error("Failed to toggle host");
       setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
     } finally {
-      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
       signalBannerRefresh();
     }
   };
