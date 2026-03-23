@@ -1,6 +1,6 @@
 name: Monitor Upstream Web Image
 
-# Runs daily to detect upstream changes to web-related paths and alert via Pushover.
+# Runs daily to detect upstream changes to web-related paths and send alerts.
 # Stores the last-seen upstream SHA in docker/web/.upstream-sha for change detection
 # (the commit does NOT trigger a build — .upstream-sha is excluded from
 # docker-build-web.yml's path filter).
@@ -8,8 +8,6 @@ name: Monitor Upstream Web Image
 # Alerts are sent when:
 # 1. Upstream commits to app/, src/, docker/web/, or key config files (your fork's web image may be outdated)
 # 2. Upstream ships their own web image build workflow (fork build may become redundant)
-#
-# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
 
 on:
   schedule:
@@ -17,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       test_alert:
-        description: 'Send a test Pushover alert (skips upstream checks)'
+        description: 'Send a test alert (skips upstream checks)'
         type: boolean
         default: false
 
@@ -92,7 +90,7 @@ jobs:
             echo "::notice::First run — bootstrapped upstream SHA. No alert sent."
           fi
 
-      - name: Send Pushover alert when upstream web code changes
+      - name: Send alert when upstream web code changes
         if: steps.synced.outputs.changed == 'true'
         run: |
           curl -s --fail-with-body \
@@ -114,7 +112,7 @@ jobs:
             --jq '[.[].name | select(test("web"; "i"))] | length > 0' 2>/dev/null || echo "false")
           echo "found=$FOUND" >> "$GITHUB_OUTPUT"
 
-      - name: Send Pushover alert if upstream now builds the web image
+      - name: Send alert if upstream now builds the web image
         if: steps.upstream-workflow-check.outputs.found == 'true' || inputs.test_alert == true
         run: |
           curl -s --fail-with-body \

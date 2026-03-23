@@ -1,14 +1,12 @@
 name: Monitor Upstream L4 Port Manager
 
-# Runs daily to detect upstream changes to docker/l4-port-manager/ and alert via Pushover.
+# Runs daily to detect upstream changes to docker/l4-port-manager/ and send alerts.
 # Stores the last-seen upstream SHA in .upstream-sha for change detection (commit does NOT
 # trigger a build — .upstream-sha is excluded from docker-build-l4-port-manager.yml's path filter).
 #
 # Alerts are sent when:
 # 1. Upstream commits to docker/l4-port-manager/ (review + rebuild manually if needed)
 # 2. Upstream ships their own l4-port-manager build workflow (fork build may become redundant)
-#
-# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
 
 on:
   schedule:
@@ -16,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       test_alert:
-        description: 'Send a test Pushover alert (skips upstream checks)'
+        description: 'Send a test alert (skips upstream checks)'
         type: boolean
         default: false
 
@@ -76,7 +74,7 @@ jobs:
             echo "::notice::First run — bootstrapped upstream SHA. No alert sent."
           fi
 
-      - name: Send Pushover alert when upstream l4-port-manager code changes
+      - name: Send alert when upstream l4-port-manager code changes
         if: steps.synced.outputs.changed == 'true'
         run: |
           curl -s --fail-with-body \
@@ -98,7 +96,7 @@ jobs:
             --jq '[.[].name | select(test("l4"; "i"))] | length > 0' 2>/dev/null || echo "false")
           echo "found=$FOUND" >> "$GITHUB_OUTPUT"
 
-      - name: Send Pushover alert if upstream now builds l4-port-manager
+      - name: Send alert if upstream now builds l4-port-manager
         if: steps.upstream-workflow-check.outputs.found == 'true' || inputs.test_alert == true
         run: |
           curl -s --fail-with-body \
