@@ -114,7 +114,7 @@ jobs:
       - name: Classify conflicts with GitHub Models (gpt-4o-mini — free tier)
         id: ai
         if: >
-          steps.merge_check.result == 'success' &&
+          steps.merge_check.outcome == 'success' &&
           steps.merge_check.outputs.conflict_count != '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -183,7 +183,7 @@ jobs:
                 echo ""
                 echo "---"
                 echo ""
-                echo "### AI Analysis"
+                echo "### Copilot Analysis"
                 echo ""
                 cat /tmp/ai-analysis.txt
               fi
@@ -192,7 +192,7 @@ jobs:
 
       - name: Send Pushover silent notification (conflicts only)
         if: >
-          steps.merge_check.result == 'success' &&
+          steps.merge_check.outcome == 'success' &&
           steps.merge_check.outputs.conflict_count != '0'
         run: |
           CONFLICT_COUNT="${{ steps.merge_check.outputs.conflict_count }}"
