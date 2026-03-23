@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/src/lib/auth';
+
+export const dynamic = 'force-dynamic';
 import { getAnalyticsHosts } from '@/src/lib/analytics-db';
 
 export async function GET() {

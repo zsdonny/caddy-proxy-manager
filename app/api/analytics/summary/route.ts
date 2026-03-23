@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { requireUser } from '@/src/lib/auth';
 import { getAnalyticsSummary, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
 

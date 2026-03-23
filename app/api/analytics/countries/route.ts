@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/src/lib/auth';
+
+export const dynamic = 'force-dynamic';
 import { getAnalyticsCountries, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
 
 export async function GET(req: NextRequest) {
