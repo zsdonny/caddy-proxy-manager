@@ -1,0 +1,213 @@
+name: Feature/Fix Branch — Upstream Merge Check
+
+# Checks every feature/* and fix/* branch against fuomag9/caddy-proxy-manager@develop.
+# ● Step summary written on every run (readable in the Actions UI)
+# ● Pushover silent notification (priority=-1, no sound) sent ONLY when ≥1 conflict found
+# ● GitHub Models gpt-4o-mini (free tier — no Copilot Pro quota consumed) classifies each
+#   conflicting file as FORK-EXCLUSIVE (expected divergence) vs GENUINE CLASH (needs resolution)
+#
+# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
+# Requires Git 2.38+ for `git merge-tree --write-tree` (ubuntu-latest ships Git 2.43+)
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      models: read
+
+    env:
+      UPSTREAM_REPO: fuomag9/caddy-proxy-manager
+      UPSTREAM_BRANCH: develop
+
+    steps:
+      - name: Checkout repository (full history needed for merge-base resolution)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}" --no-tags --quiet
+          git fetch origin --no-tags --quiet
+
+      - name: Enumerate feature/* and fix/* branches
+        id: branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCHES=$(gh api "repos/${{ github.repository }}/branches" \
+            --paginate \
+            --jq '[.[].name | select(test("^(feature|fix)/"))] | sort | .[]' \
+            2>/dev/null || true)
+
+          if [ -z "$BRANCHES" ]; then
+            echo "::notice::No feature/* or fix/* branches found — nothing to check."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+          else
+            COUNT=$(echo "$BRANCHES" | wc -l | tr -d ' ')
+            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+            {
+              printf 'list<<BREOF\n'
+              echo "$BRANCHES"
+              printf 'BREOF\n'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check each branch against upstream/develop
+        id: merge_check
+        if: steps.branches.outputs.count != '0'
+        run: |
+          RESULTS_FILE="/tmp/merge-results.json"
+          echo "[]" > "$RESULTS_FILE"
+          CONFLICT_COUNT=0
+          CLEAN_COUNT=0
+
+          while IFS= read -r BRANCH; do
+            [ -z "$BRANCH" ] && continue
+
+            # Ensure branch ref is available locally (no-op if already fetched via fetch-depth:0)
+            git fetch origin "${BRANCH}:refs/remotes/origin/${BRANCH}" \
+              --no-tags --quiet 2>/dev/null || true
+
+            # Dry-run 3-way merge — automatically finds merge-base, no workspace changes
+            set +e
+            MERGE_OUTPUT=$(git merge-tree --write-tree \
+              "refs/remotes/origin/${BRANCH}" \
+              "refs/remotes/upstream/${UPSTREAM_BRANCH}" 2>&1)
+            MERGE_EXIT=$?
+            set -e
+
+            if [ "$MERGE_EXIT" -eq 0 ]; then
+              CLEAN_COUNT=$((CLEAN_COUNT + 1))
+              jq --arg b "$BRANCH" \
+                '. + [{"branch": $b, "status": "clean", "conflicts": []}]' \
+                "$RESULTS_FILE" > "${RESULTS_FILE}.tmp" && mv "${RESULTS_FILE}.tmp" "$RESULTS_FILE"
+            else
+              CONFLICT_COUNT=$((CONFLICT_COUNT + 1))
+              # Extract conflicting file paths — covers content, add/add, modify/delete conflict types
+              CONFLICT_FILES=$(echo "$MERGE_OUTPUT" \
+                | awk '
+                    /^CONFLICT/ && /Merge conflict in/ { print $NF }
+                    /^CONFLICT \(modify\/delete\)/     { print $3 }
+                    /^CONFLICT \(delete\/modify\)/     { print $3 }
+                  ' \
+                | sort -u \
+                | (jq -R . | jq -s . 2>/dev/null || echo "[]"))
+              [ -z "$CONFLICT_FILES" ] && CONFLICT_FILES="[]"
+
+              jq --arg b "$BRANCH" --argjson c "$CONFLICT_FILES" \
+                '. + [{"branch": $b, "status": "conflicts", "conflicts": $c}]' \
+                "$RESULTS_FILE" > "${RESULTS_FILE}.tmp" && mv "${RESULTS_FILE}.tmp" "$RESULTS_FILE"
+            fi
+          done <<< "${{ steps.branches.outputs.list }}"
+
+          echo "conflict_count=$CONFLICT_COUNT" >> "$GITHUB_OUTPUT"
+          echo "clean_count=$CLEAN_COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Classify conflicts with GitHub Models (gpt-4o-mini — free tier)
+        id: ai
+        if: >
+          steps.merge_check.result == 'success' &&
+          steps.merge_check.outputs.conflict_count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          RESULTS=$(cat /tmp/merge-results.json)
+
+          PAYLOAD=$(jq -n \
+            --arg results "$RESULTS" \
+            '{
+              "model": "gpt-4o-mini",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a fork-maintenance assistant. The user maintains a fork (zsdonny/caddy-proxy-manager) of upstream (fuomag9/caddy-proxy-manager). The fork adds features absent in upstream: WAF geo-blocking, mTLS client certificates, analytics dashboard, L4 UDP routing improvements, and OAuth account linking. Fork-specific files include: app/(dashboard)/analytics/, src/lib/caddy-waf.ts, src/lib/acme-certs.ts, src/lib/caddy-mtls.ts, and drizzle migration files numbered 0010 and above.\n\nFor each conflicting file, classify it as:\n- FORK-EXCLUSIVE — only exists in the fork or was introduced by a fork-only feature. Expected divergence; not a blocker for upstreaming other changes.\n- GENUINE CLASH — both the fork branch and upstream independently modified the same shared file. Must be manually resolved before the branch can be submitted upstream.\n\nBe concise: 1–2 sentences per file. End with a one-sentence action summary."
+                },
+                {
+                  "role": "user",
+                  "content": ("Classify the conflicting files for each branch as FORK-EXCLUSIVE or GENUINE CLASH and briefly explain why:\n\n" + $results)
+                }
+              ],
+              "max_tokens": 800,
+              "temperature": 0.2
+            }')
+
+          RESPONSE=$(curl -s --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            https://models.inference.ai.azure.com/chat/completions)
+
+          printf '%s\n' "$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "AI analysis unavailable."')" \
+            > /tmp/ai-analysis.txt
+
+      - name: Write step summary
+        if: always()
+        run: |
+          TOTAL="${{ steps.branches.outputs.count }}"
+          CONFLICT_COUNT="${{ steps.merge_check.outputs.conflict_count }}"
+          CLEAN_COUNT="${{ steps.merge_check.outputs.clean_count }}"
+
+          {
+            echo "## Feature/Fix Branch — Upstream Merge Check"
+            echo ""
+            echo "**Upstream:** \`fuomag9/caddy-proxy-manager @ develop\`  |  **$(date -u '+%Y-%m-%d %H:%M UTC')**"
+            echo ""
+
+            if [ "${TOTAL:-0}" -eq 0 ] || [ ! -f /tmp/merge-results.json ]; then
+              echo "_No \`feature/*\` or \`fix/*\` branches found._"
+            else
+              echo "| Branch | Status | Conflicting Files |"
+              echo "|--------|--------|-------------------|"
+              jq -r '.[] | [
+                .branch,
+                .status,
+                (.conflicts | if length == 0 then "—" else map("`\(.)`") | join(", ") end)
+              ] | @tsv' /tmp/merge-results.json \
+              | while IFS=$'\t' read -r BRANCH STATUS FILES; do
+                  if [ "$STATUS" = "clean" ]; then ICON="✅ Clean"; else ICON="❌ Conflicts"; fi
+                  echo "| \`${BRANCH}\` | ${ICON} | ${FILES} |"
+                done
+              echo ""
+              echo "**${CLEAN_COUNT:-0}/${TOTAL} branches merge cleanly into upstream. ${CONFLICT_COUNT:-0} need attention.**"
+
+              if [ -f /tmp/ai-analysis.txt ] && [ -s /tmp/ai-analysis.txt ]; then
+                echo ""
+                echo "---"
+                echo ""
+                echo "### AI Analysis"
+                echo ""
+                cat /tmp/ai-analysis.txt
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send Pushover silent notification (conflicts only)
+        if: >
+          steps.merge_check.result == 'success' &&
+          steps.merge_check.outputs.conflict_count != '0'
+        run: |
+          CONFLICT_COUNT="${{ steps.merge_check.outputs.conflict_count }}"
+          TOTAL="${{ steps.branches.outputs.count }}"
+          CONFLICT_BRANCHES=$(jq -r \
+            '[.[] | select(.status == "conflicts") | .branch] | join(", ")' \
+            /tmp/merge-results.json)
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -s --fail-with-body \
+            --form-string "token=${{ secrets.PUSHOVER_APP_TOKEN }}" \
+            --form-string "user=${{ secrets.PUSHOVER_USER_KEY }}" \
+            --form-string "title=Feature branch merge check — conflicts found" \
+            --form-string "message=${CONFLICT_COUNT}/${TOTAL} branches conflict with upstream/develop: ${CONFLICT_BRANCHES}" \
+            --form-string "url=${RUN_URL}" \
+            --form-string "url_title=View full report" \
+            --form-string "priority=-1" \
+            https://api.pushover.net/1/messages.json
