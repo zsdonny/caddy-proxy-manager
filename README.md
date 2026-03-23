@@ -22,6 +22,9 @@
 | **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them | Fork-exclusive |
+| **Config panel icons** | All config builder panels in Proxy Hosts and L4 Proxy Hosts now have distinct colored icons (Authentik, Load Balancer, DNS Resolver, Upstream DNS Pinning). L4 panels were restyled to match the Proxy Hosts rounded-card appearance, and the L4 Geo Blocking icon was aligned to use `Globe` for consistency. | Fork-exclusive |
+| **Features column** | Proxy Hosts and L4 Proxy Hosts tables now show a Features column with compact icon badges for each active feature. Geo Blocking and WAF badges use a dot indicator + popover to surface override mode or custom settings. | Fork-exclusive |
+| **Features filter** | The Features column header has a dropdown checkbox filter. Selecting one or more features narrows the table to rows with any of those features active (OR logic). | Fork-exclusive |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
