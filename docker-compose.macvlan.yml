@@ -71,10 +71,15 @@ services:
       - caddy-network
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.2'
+          memory: 5g
 
   caddy:
     container_name: caddy-proxy-manager-caddy
@@ -103,10 +108,15 @@ services:
       # Try localhost first (works before web app configures Caddy),
       # then fall back to each container IP (works after admin is rebound to bridge IP).
       test: ["CMD", "sh", "-c", "for ip in localhost $(hostname -i); do wget -qO /dev/null http://$ip:2019/config/ 2>/dev/null && exit 0; done; exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 15s
+      timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 3g
 
   # l4-port-manager is intentionally absent in macvlan mode.
   # L4 port changes are handled by Caddy config reload — no container recreation needed.

@@ -62,7 +62,18 @@ const sqlite =
   globalForDrizzle.__SQLITE_CLIENT__ ??
   (() => {
     ensureDirectoryFor(sqlitePath);
-    return new Database(sqlitePath);
+    const client = new Database(sqlitePath);
+    // Performance pragmas — WAL allows concurrent reads during writes,
+    // busy_timeout prevents SQLITE_BUSY on contention, synchronous=NORMAL
+    // is safe with WAL and reduces fsync overhead, cache_size gives 8 MB page cache.
+    if (sqlitePath !== ":memory:") {
+      client.exec("PRAGMA journal_mode = WAL;");
+      client.exec("PRAGMA busy_timeout = 5000;");
+      client.exec("PRAGMA synchronous = NORMAL;");
+      client.exec("PRAGMA cache_size = -8000;");
+      console.log("[db] WAL mode enabled, busy_timeout=5000, cache=8MB");
+    }
+    return client;
   })();
 
 if (process.env.NODE_ENV !== "production") {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Cloud, Globe, Network, Pin, Activity,
-  ScrollText, Settings2, UserCheck, MapPin,
+  ScrollText, Settings2, UserCheck, MapPin, Clock,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import type {
   DnsSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
+  RetentionSettings,
 } from "@/lib/settings";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
 import {
@@ -41,6 +42,7 @@ import {
   toggleReplicaInstanceAction,
   syncReplicaInstancesAction,
   updateGeoBlockSettingsAction,
+  updateRetentionSettingsAction,
 } from "./actions";
 import { ReactNode } from "react";
 
@@ -119,6 +121,7 @@ const A: Record<string, AccentConfig> = {
   metrics:    { border: "border-l-rose-500",     icon: "border-rose-500/30 bg-rose-500/10 text-rose-500"        },
   logging:    { border: "border-l-amber-500",    icon: "border-amber-500/30 bg-amber-500/10 text-amber-500"     },
   geoblock:   { border: "border-l-teal-500",     icon: "border-teal-500/30 bg-teal-500/10 text-teal-500"        },
+  retention:  { border: "border-l-sky-500",      icon: "border-sky-500/30 bg-sky-500/10 text-sky-500"           },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -136,6 +139,7 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  retention: RetentionSettings | null;
   instanceSync: {
     mode: "standalone" | "primary" | "replica";
     modeFromEnv: boolean;
@@ -182,6 +186,7 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
+  retention,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -198,6 +203,7 @@ export default function SettingsClient({
   const [replicaInstanceState, replicaInstanceFormAction] = useFormState(createReplicaInstanceAction, null);
   const [syncState, syncFormAction] = useFormState(syncReplicaInstancesAction, null);
   const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
+  const [retentionState, retentionFormAction] = useFormState(updateRetentionSettingsAction, null);
 
   const isReplica = instanceSync.mode === "replica";
   const isPrimary = instanceSync.mode === "primary";
@@ -879,6 +885,53 @@ export default function SettingsClient({
           />
           <div className="flex justify-end">
             <Button type="submit" size="sm">Save geoblocking settings</Button>
+          </div>
+        </form>
+      </SettingSection>
+
+      {/* ── Log Retention ── */}
+      <SettingSection
+        icon={<Clock className="h-4 w-4" />}
+        title="Log Retention"
+        description="Control how long traffic analytics and WAF event data are kept in the database before automatic purge."
+        accent={A.retention}
+      >
+        <form action={retentionFormAction} className="flex flex-col gap-3">
+          {retentionState?.message && (
+            <StatusAlert message={retentionState.message} success={retentionState.success} />
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="retention-traffic">Traffic events retention (days)</Label>
+            <Input
+              id="retention-traffic"
+              name="trafficRetentionDays"
+              type="number"
+              min={1}
+              max={365}
+              defaultValue={retention?.trafficRetentionDays ?? 90}
+              className="h-8 text-sm w-32 font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              Requests logged by the access log parser. Range: 1–365 days.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="retention-waf">WAF events retention (days)</Label>
+            <Input
+              id="retention-waf"
+              name="wafRetentionDays"
+              type="number"
+              min={1}
+              max={365}
+              defaultValue={retention?.wafRetentionDays ?? 90}
+              className="h-8 text-sm w-32 font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              WAF rule matches and blocked requests. Range: 1–365 days.
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm">Save retention settings</Button>
           </div>
         </form>
       </SettingSection>

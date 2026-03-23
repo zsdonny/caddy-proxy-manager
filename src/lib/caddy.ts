@@ -1725,7 +1725,14 @@ async function buildCaddyDocument() {
     // Coraza does not write matched rules to the audit log (known bug), but it does emit
     // structured JSON lines via the http.handlers.waf logger for each matched rule.
     waf_rules: {
-      writer: { output: "file", filename: "/logs/waf-rules.log", mode: "0640" },
+      writer: {
+        output: "file",
+        filename: "/logs/waf-rules.log",
+        mode: "0640",
+        roll_size_mb: 50,
+        roll_keep: 3,
+        roll_keep_for_days: 7,
+      },
       encoder: { format: "json" },
       include: ["http.handlers.waf"],
       level: "ERROR"
@@ -1733,7 +1740,14 @@ async function buildCaddyDocument() {
   };
   if (loggingEnabled) {
     loggingLogs.http_access = {
-      writer: { output: "file", filename: "/logs/access.log", mode: "0640" },
+      writer: {
+        output: "file",
+        filename: "/logs/access.log",
+        mode: "0640",
+        roll_size_mb: 50,
+        roll_keep: 3,
+        roll_keep_for_days: 7,
+      },
       encoder: { format: loggingFormat },
       include: ["http.log.access"]
     };
