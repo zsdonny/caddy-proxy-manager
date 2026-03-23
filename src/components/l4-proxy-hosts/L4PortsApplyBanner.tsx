@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
   const [data, setData] = useState<PortsResponse | null>(null);
   const [applying, setApplying] = useState(false);
   const [polling, setPolling] = useState(false);
+  // Track whether we've already signalled ConnectionMonitor for this apply cycle
+  const reconnectSignalledRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -58,6 +60,19 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
     if (!data) return;
     const shouldPoll =
       data.status.state === "pending" || data.status.state === "applying";
+
+    // Bootstrap case: L4 manager is automatically applying (no user click).
+    // Signal ConnectionMonitor so the reconnecting overlay appears immediately
+    // rather than waiting for 2 health-ping failures.
+    if (data.status.state === "applying" && !reconnectSignalledRef.current) {
+      reconnectSignalledRef.current = true;
+      window.dispatchEvent(new Event("caddy-reconnect-expected"));
+    }
+    // Reset the flag once the apply cycle completes
+    if (!shouldPoll) {
+      reconnectSignalledRef.current = false;
+    }
+
     if (shouldPoll && !polling) {
       setPolling(true);
       const interval = setInterval(fetchStatus, 2000);
