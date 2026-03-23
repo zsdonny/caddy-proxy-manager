@@ -228,6 +228,18 @@ jobs:
           PROMPT_FILE="/tmp/ai-prompt.txt"
           printf '' > "$PROMPT_FILE"
 
+          # Count total conflicting files across all branches so we can budget diff lines fairly.
+          # Budget: ~5500 token headroom for diffs (8000 limit minus ~2500 for system prompt +
+          # response reserve). 1 token ≈ 4 chars, so ~22000 chars total.
+          # Each diff line averages ~60 chars; reserve 200 chars per file for headers/fences.
+          TOTAL_CONFLICT_FILES=$(jq '[.[] | select(.status=="conflict") | .conflicts | length] | add // 0' /tmp/merge-results.json)
+          CHARS_PER_FILE=$(( TOTAL_CONFLICT_FILES > 0 ? (22000 - TOTAL_CONFLICT_FILES * 200) / TOTAL_CONFLICT_FILES : 22000 ))
+          LINES_PER_FILE=$(( CHARS_PER_FILE / 60 ))
+          # Clamp: at least 5 lines so every file gets some context; cap at 150 (the stored max)
+          [ "$LINES_PER_FILE" -lt 5 ]   && LINES_PER_FILE=5
+          [ "$LINES_PER_FILE" -gt 150 ] && LINES_PER_FILE=150
+          echo "Conflict files: $TOTAL_CONFLICT_FILES — diff lines per file: $LINES_PER_FILE"
+
           jq -r '.[] | select(.status == "conflict") | .branch' /tmp/merge-results.json | \
           while IFS= read -r BRANCH_NAME; do
             printf '### Branch: %s\n\n' "$BRANCH_NAME" >> "$PROMPT_FILE"
@@ -235,16 +247,14 @@ jobs:
               '.[] | select(.branch == $b) | .conflicts[]' \
               /tmp/merge-results.json | \
             while IFS= read -r FILE; do
-              # Truncate each diff to 20 lines — enough context for classification;
-              # full 150-line diff is preserved in the artifact for human review.
               DIFF=$(jq -r --arg b "$BRANCH_NAME" --arg f "$FILE" \
                 '.[] | select(.branch == $b) | .diffs[$f] // "(diff unavailable)"' \
-                /tmp/merge-results.json | head -n 20)
+                /tmp/merge-results.json | head -n "$LINES_PER_FILE")
               printf '**%s:**\n```diff\n%s\n```\n\n' "$FILE" "$DIFF" >> "$PROMPT_FILE"
             done
           done
 
-          # Hard cap at 22000 chars (~5500 tokens) so the payload never exceeds 8000 tokens
+          # Hard cap at 22000 chars as a final safety backstop
           PROMPT_CONTENT=$(head -c 22000 "$PROMPT_FILE")
 
           PAYLOAD=$(jq -n \
