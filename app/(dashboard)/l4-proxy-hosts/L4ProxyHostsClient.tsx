@@ -86,7 +86,7 @@ function L4GeoBlockBadge({ host }: { host: L4ProxyHost }) {
 function L4FeatureBadges({ host }: { host: L4ProxyHost }) {
   const badges: React.ReactNode[] = [];
   if (host.tls_termination) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
-  if (host.proxy_protocol_version && host.proxy_protocol_version !== "__none__") badges.push(<Badge key="pp" variant="muted" className="text-[10px] px-1.5 py-0"><Cable className="h-2.5 w-2.5 mr-0.5" />ProxyProto</Badge>);
+  if (host.proxy_protocol_version) badges.push(<Badge key="pp" variant="muted" className="text-[10px] px-1.5 py-0"><Cable className="h-2.5 w-2.5 mr-0.5" />ProxyProto</Badge>);
   if (host.geoblock?.enabled) badges.push(<L4GeoBlockBadge key="geo" host={host} />);
   if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
   if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
@@ -103,7 +103,7 @@ type L4FeatureKey = (typeof L4_FEATURE_FILTERS)[number];
 function getL4HostFeatures(host: L4ProxyHost): Set<L4FeatureKey> {
   const f = new Set<L4FeatureKey>();
   if (host.tls_termination) f.add("TLS");
-  if (host.proxy_protocol_version && host.proxy_protocol_version !== "__none__") f.add("ProxyProto");
+  if (host.proxy_protocol_version) f.add("ProxyProto");
   if (host.geoblock?.enabled) f.add("GeoBlock");
   if (host.load_balancer?.enabled) f.add("LB");
   if (host.dns_resolver?.enabled) f.add("DNS");
