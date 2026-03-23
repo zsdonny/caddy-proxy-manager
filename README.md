@@ -26,6 +26,10 @@
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them | Fork-exclusive |
 | **UI enhancements** | Config builder panels have distinct colored icons; host tables include a Features column with icon badges and a dropdown filter. | Fork-exclusive |
+| **Snappy UI** | Optimistic toggles give instant visual feedback; forms show spinners during submission; Caddy config reloads are deferred so the UI never blocks on Caddy; connection-error banner with automatic recovery detection. | Fork-exclusive |
+| **Primary/replica terminology** | Renamed all master/slave references to primary/replica throughout the UI, API, and env vars. `INSTANCE_SLAVES` still works as a deprecated fallback for `INSTANCE_REPLICAS`. Legacy `"master"`/`"slave"` values in the DB and env are silently mapped with a deprecation warning — no migration needed. | In progress (`feature/instance-sync-improvements`) |
+| **Replica sync cache fix** | After a replica receives a sync payload from the primary, `revalidatePath` is called so the replica's UI immediately reflects the updated configuration without a manual page reload. | In progress (`fix/replica-sync-revalidate`) |
+| **Replica sync-status polling** | The settings page on a replica polls `/api/instances/sync-status` every 15 seconds and automatically refreshes the page with a toast notification when a new sync is detected. | In progress (`feature/instance-sync-improvements`) |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
