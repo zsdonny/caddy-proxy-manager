@@ -88,13 +88,13 @@ export async function register() {
       console.error("Failed to start WAF log parser:", error);
     }
 
-    // Start periodic instance sync if configured (master mode only)
+    // Start periodic instance sync if configured (primary mode only)
     const { getInstanceMode, getSyncIntervalMs, syncInstances } = await import("./lib/instance-sync");
     try {
       const mode = await getInstanceMode();
       const intervalMs = getSyncIntervalMs();
 
-      if (mode === "master" && intervalMs > 0) {
+      if (mode === "primary" && intervalMs > 0) {
         console.log(`Starting periodic instance sync (every ${intervalMs / 1000}s)`);
         setInterval(async () => {
           try {

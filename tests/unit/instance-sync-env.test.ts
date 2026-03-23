@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
-  getEnvSlaveInstances,
+  getEnvReplicaInstances,
   getSyncIntervalMs,
   isHttpSyncAllowed,
   isInstanceModeFromEnv,
@@ -15,6 +15,7 @@ import {
 } from '../../src/lib/instance-sync';
 
 const KEYS = [
+  'INSTANCE_REPLICAS',
   'INSTANCE_SLAVES',
   'INSTANCE_SYNC_INTERVAL',
   'INSTANCE_SYNC_ALLOW_HTTP',
@@ -31,77 +32,98 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// getEnvSlaveInstances
+// getEnvReplicaInstances
 // ---------------------------------------------------------------------------
 
-describe('getEnvSlaveInstances', () => {
+describe('getEnvReplicaInstances', () => {
   it('returns empty array when env var is not set', () => {
-    expect(getEnvSlaveInstances()).toEqual([]);
+    expect(getEnvReplicaInstances()).toEqual([]);
   });
 
   it('returns empty array for empty string', () => {
-    process.env.INSTANCE_SLAVES = '';
-    expect(getEnvSlaveInstances()).toEqual([]);
+    process.env.INSTANCE_REPLICAS = '';
+    expect(getEnvReplicaInstances()).toEqual([]);
   });
 
-  it('parses a valid single slave entry', () => {
-    process.env.INSTANCE_SLAVES = JSON.stringify([
-      { name: 'slave1', url: 'https://slave.example.com', token: 'secret123' },
+  it('parses a valid single replica entry via INSTANCE_REPLICAS', () => {
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
+      { name: 'replica1', url: 'https://replica.example.com', token: 'secret123' },
     ]);
-    const result = getEnvSlaveInstances();
+    const result = getEnvReplicaInstances();
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
-      name: 'slave1',
-      url: 'https://slave.example.com',
+      name: 'replica1',
+      url: 'https://replica.example.com',
       token: 'secret123',
     });
   });
 
-  it('parses multiple slave entries', () => {
+  it('falls back to deprecated INSTANCE_SLAVES when INSTANCE_REPLICAS not set', () => {
     process.env.INSTANCE_SLAVES = JSON.stringify([
-      { name: 'slave1', url: 'https://slave1.example.com', token: 'tok1' },
-      { name: 'slave2', url: 'https://slave2.example.com', token: 'tok2' },
+      { name: 'replica1', url: 'https://replica.example.com', token: 'secret123' },
     ]);
-    expect(getEnvSlaveInstances()).toHaveLength(2);
+    const result = getEnvReplicaInstances();
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('replica1');
+  });
+
+  it('prefers INSTANCE_REPLICAS over INSTANCE_SLAVES when both set', () => {
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
+      { name: 'preferred', url: 'https://prefer.example.com', token: 'tok-prefer' },
+    ]);
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'legacy', url: 'https://legacy.example.com', token: 'tok-legacy' },
+    ]);
+    const result = getEnvReplicaInstances();
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('preferred');
+  });
+
+  it('parses multiple replica entries', () => {
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
+      { name: 'replica1', url: 'https://replica1.example.com', token: 'tok1' },
+      { name: 'replica2', url: 'https://replica2.example.com', token: 'tok2' },
+    ]);
+    expect(getEnvReplicaInstances()).toHaveLength(2);
   });
 
   it('returns empty array for non-array JSON', () => {
-    process.env.INSTANCE_SLAVES = '{"name":"slave1"}'; // object, not array
-    expect(getEnvSlaveInstances()).toEqual([]);
+    process.env.INSTANCE_REPLICAS = '{"name":"replica1"}'; // object, not array
+    expect(getEnvReplicaInstances()).toEqual([]);
   });
 
   it('returns empty array for malformed JSON', () => {
-    process.env.INSTANCE_SLAVES = '{bad json';
-    expect(getEnvSlaveInstances()).toEqual([]);
+    process.env.INSTANCE_REPLICAS = '{bad json';
+    expect(getEnvReplicaInstances()).toEqual([]);
   });
 
   it('filters out entries missing required fields', () => {
-    process.env.INSTANCE_SLAVES = JSON.stringify([
-      { name: 'slave1', url: 'https://slave1.example.com', token: 'tok1' }, // valid
-      { name: 'slave2', url: 'https://slave2.example.com' },                // missing token
-      { name: 'slave3', token: 'tok3' },                                    // missing url
-      { url: 'https://slave4.example.com', token: 'tok4' },                 // missing name
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
+      { name: 'replica1', url: 'https://replica1.example.com', token: 'tok1' }, // valid
+      { name: 'replica2', url: 'https://replica2.example.com' },                // missing token
+      { name: 'replica3', token: 'tok3' },                                      // missing url
+      { url: 'https://replica4.example.com', token: 'tok4' },                   // missing name
     ]);
-    const result = getEnvSlaveInstances();
+    const result = getEnvReplicaInstances();
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('slave1');
+    expect(result[0].name).toBe('replica1');
   });
 
   it('filters out entries with empty string fields', () => {
-    process.env.INSTANCE_SLAVES = JSON.stringify([
-      { name: '', url: 'https://slave.example.com', token: 'tok' }, // empty name
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
+      { name: '', url: 'https://replica.example.com', token: 'tok' }, // empty name
     ]);
-    expect(getEnvSlaveInstances()).toEqual([]);
+    expect(getEnvReplicaInstances()).toEqual([]);
   });
 
   it('filters out non-object entries', () => {
-    process.env.INSTANCE_SLAVES = JSON.stringify([
+    process.env.INSTANCE_REPLICAS = JSON.stringify([
       42,
       null,
       'string',
       { name: 'ok', url: 'https://ok.com', token: 'tok' },
     ]);
-    const result = getEnvSlaveInstances();
+    const result = getEnvReplicaInstances();
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('ok');
   });
@@ -196,12 +218,22 @@ describe('isInstanceModeFromEnv', () => {
     expect(isInstanceModeFromEnv()).toBe(false);
   });
 
-  it('returns true for "master"', () => {
+  it('returns true for "primary"', () => {
+    process.env.INSTANCE_MODE = 'primary';
+    expect(isInstanceModeFromEnv()).toBe(true);
+  });
+
+  it('returns true for "replica"', () => {
+    process.env.INSTANCE_MODE = 'replica';
+    expect(isInstanceModeFromEnv()).toBe(true);
+  });
+
+  it('returns true for legacy "master" (deprecated)', () => {
     process.env.INSTANCE_MODE = 'master';
     expect(isInstanceModeFromEnv()).toBe(true);
   });
 
-  it('returns true for "slave"', () => {
+  it('returns true for legacy "slave" (deprecated)', () => {
     process.env.INSTANCE_MODE = 'slave';
     expect(isInstanceModeFromEnv()).toBe(true);
   });
