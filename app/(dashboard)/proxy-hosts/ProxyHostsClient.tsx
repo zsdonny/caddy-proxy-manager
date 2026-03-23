@@ -130,7 +130,6 @@ type ProxyFeatureKey = (typeof PROXY_FEATURE_FILTERS)[number];
 
 function getProxyHostFeatures(host: ProxyHost): Set<ProxyFeatureKey> {
   const f = new Set<ProxyFeatureKey>();
-  if (host.certificate_id) f.add("TLS");
   if (host.access_list_id) f.add("Auth");
   if (host.authentik?.enabled) f.add("Authentik");
   if (host.waf?.enabled) f.add("WAF");
