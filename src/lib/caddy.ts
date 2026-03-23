@@ -1321,10 +1321,13 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
   ]);
 
   const formatListenAddress = (protocol: string, listenAddress: string) => {
-    return protocol === "udp" ? `udp/${listenAddress}` : listenAddress;
+    if (protocol === "udp") {
+      return listenAddress.startsWith("udp/") ? listenAddress : `udp/${listenAddress}`;
+    }
+    return listenAddress;
   };
 
-  // Group hosts by listen address — multiple hosts on the same port share routes in one server
+  // Group hosts by protocol + listen address — TCP and UDP on the same port get separate servers
   const serverMap = new Map<string, typeof l4Hosts>();
   for (const host of l4Hosts) {
     const key = `${host.protocol}:${host.listenAddress}`;
@@ -1444,11 +1447,9 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
         resolvedDials = pinned;
       }
 
-      // For UDP hosts, upstream dials must also use the udp/ prefix
-      const dialPrefix = (host.protocol as string) === "udp" ? "udp/" : "";
       const proxyHandler: Record<string, unknown> = {
         handler: "proxy",
-        upstreams: resolvedDials.map((u) => ({ dial: [`${dialPrefix}${u}`] })),
+        upstreams: resolvedDials.map((u) => ({ dial: [formatListenAddress(host.protocol, u)] })),
       };
       if (host.proxyProtocolVersion) {
         proxyHandler.proxy_protocol = host.proxyProtocolVersion;
@@ -1502,13 +1503,8 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
       routes.push(route);
     }
 
-    // Determine protocol from the hosts on this listen address.
-    // All hosts sharing a listen address must use the same protocol.
-    const protocol = hosts[0].protocol as string;
-    const listenValue = protocol === "udp" ? `udp/${listenAddr}` : listenAddr;
-
     servers[`l4_server_${serverIdx++}`] = {
-      listen: [listenValue],
+      listen: [listenAddr],
       routes,
     };
   }
