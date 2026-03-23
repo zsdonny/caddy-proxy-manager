@@ -63,7 +63,7 @@ function GeoBlockBadge({ host }: { host: ProxyHost }) {
   if (hasOverride) popoverLines.push("Override global geo blocking");
   if (hasCustomBlock) popoverLines.push(host.geoblock?.redirect_url ? "Custom redirect URL" : "Custom block page");
   const badge = (
-    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 relative">
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 relative transition-all duration-150 hover:scale-110 hover:brightness-110">
       <Globe className="h-2.5 w-2.5 mr-0.5" />{label}
       {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-rose-500" />}
     </Badge>
@@ -88,7 +88,7 @@ function WafBadge({ host }: { host: ProxyHost }) {
   if (hasOverride) popoverLines.push("Override global WAF");
   if (hasCustom) popoverLines.push("Custom SecLang directives");
   const badge = (
-    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 relative">
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 relative transition-all duration-150 hover:scale-110 hover:brightness-110">
       <ShieldAlert className="h-2.5 w-2.5 mr-0.5" />WAF
       {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
     </Badge>
@@ -106,18 +106,18 @@ function WafBadge({ host }: { host: ProxyHost }) {
 
 function ProxyFeatureBadges({ host }: { host: ProxyHost }) {
   const badges: React.ReactNode[] = [];
-  if (host.certificate_id) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
-  if (host.access_list_id) badges.push(<Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" />Auth</Badge>);
-  if (host.authentik?.enabled) badges.push(<Badge key="authentik" variant="default" className="text-[10px] px-1.5 py-0"><KeyRound className="h-2.5 w-2.5 mr-0.5" />Authentik</Badge>);
+  if (host.certificate_id) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
+  if (host.access_list_id) badges.push(<Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" />Auth</Badge>);
+  if (host.authentik?.enabled) badges.push(<Badge key="authentik" variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-500/30 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><KeyRound className="h-2.5 w-2.5 mr-0.5" />Authentik</Badge>);
   if (host.waf?.enabled) badges.push(<WafBadge key="waf" host={host} />);
-  if (host.mtls?.enabled) badges.push(<Badge key="mtls" variant="warning" className="text-[10px] px-1.5 py-0"><LockKeyhole className="h-2.5 w-2.5 mr-0.5" />mTLS</Badge>);
+  if (host.mtls?.enabled) badges.push(<Badge key="mtls" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><LockKeyhole className="h-2.5 w-2.5 mr-0.5" />mTLS</Badge>);
   if (host.geoblock?.enabled) badges.push(<GeoBlockBadge key="geo" host={host} />);
-  if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
-  if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
-  if (host.redirects?.length > 0) badges.push(<Badge key="redirect" variant="muted" className="text-[10px] px-1.5 py-0"><CornerDownRight className="h-2.5 w-2.5 mr-0.5" />Redirect</Badge>);
-  if (host.rewrite?.path_prefix) badges.push(<Badge key="rewrite" variant="muted" className="text-[10px] px-1.5 py-0"><PenLine className="h-2.5 w-2.5 mr-0.5" />Rewrite</Badge>);
-  if (host.custom_reverse_proxy_json) badges.push(<Badge key="crp" variant="muted" className="text-[10px] px-1.5 py-0"><FileJson className="h-2.5 w-2.5 mr-0.5" />Custom RP</Badge>);
-  if (host.custom_pre_handlers_json) badges.push(<Badge key="pre" variant="muted" className="text-[10px] px-1.5 py-0"><Workflow className="h-2.5 w-2.5 mr-0.5" />Pre-Handler</Badge>);
+  if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
+  if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
+  if (host.redirects?.length > 0) badges.push(<Badge key="redirect" variant="muted" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><CornerDownRight className="h-2.5 w-2.5 mr-0.5" />Redirect</Badge>);
+  if (host.rewrite?.path_prefix) badges.push(<Badge key="rewrite" variant="muted" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><PenLine className="h-2.5 w-2.5 mr-0.5" />Rewrite</Badge>);
+  if (host.custom_reverse_proxy_json) badges.push(<Badge key="crp" variant="muted" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><FileJson className="h-2.5 w-2.5 mr-0.5" />Custom RP</Badge>);
+  if (host.custom_pre_handlers_json) badges.push(<Badge key="pre" variant="muted" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Workflow className="h-2.5 w-2.5 mr-0.5" />Pre-Handler</Badge>);
   if (badges.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
   return <div className="flex flex-wrap gap-1">{badges}</div>;
 }

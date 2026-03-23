@@ -67,7 +67,7 @@ function L4GeoBlockBadge({ host }: { host: L4ProxyHost }) {
   if (!label) return null;
   const hasOverride = host.geoblock_mode === "override";
   const badge = (
-    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 relative">
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 relative transition-all duration-150 hover:scale-110 hover:brightness-110">
       <Globe className="h-2.5 w-2.5 mr-0.5" />{label}
       {hasOverride && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-rose-500" />}
     </Badge>
@@ -85,12 +85,12 @@ function L4GeoBlockBadge({ host }: { host: L4ProxyHost }) {
 
 function L4FeatureBadges({ host }: { host: L4ProxyHost }) {
   const badges: React.ReactNode[] = [];
-  if (host.tls_termination) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
-  if (host.proxy_protocol_version) badges.push(<Badge key="pp" variant="muted" className="text-[10px] px-1.5 py-0"><Cable className="h-2.5 w-2.5 mr-0.5" />ProxyProto</Badge>);
+  if (host.tls_termination) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
+  if (host.proxy_protocol_version) badges.push(<Badge key="pp" variant="muted" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Cable className="h-2.5 w-2.5 mr-0.5" />ProxyProto</Badge>);
   if (host.geoblock?.enabled) badges.push(<L4GeoBlockBadge key="geo" host={host} />);
-  if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
-  if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
-  if (host.upstream_dns_resolution?.enabled) badges.push(<Badge key="dnspin" variant="outline" className="text-[10px] px-1.5 py-0 border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400"><Pin className="h-2.5 w-2.5 mr-0.5" />DNS Pin</Badge>);
+  if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
+  if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
+  if (host.upstream_dns_resolution?.enabled) badges.push(<Badge key="dnspin" variant="outline" className="text-[10px] px-1.5 py-0 border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Pin className="h-2.5 w-2.5 mr-0.5" />DNS Pin</Badge>);
   if (badges.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
   return <div className="flex flex-wrap gap-1">{badges}</div>;
 }
