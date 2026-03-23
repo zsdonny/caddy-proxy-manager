@@ -69,10 +69,15 @@ services:
       - caddy-network
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.2'
+          memory: 5g
 
   caddy:
     container_name: caddy-proxy-manager-caddy
@@ -112,10 +117,15 @@ services:
       - caddy-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
-      interval: 30s
-      timeout: 10s
+      interval: 15s
+      timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 3g
 
   # L4 Port Manager sidecar — automatically recreates the caddy container
   # when L4 proxy host ports change.

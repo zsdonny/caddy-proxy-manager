@@ -232,3 +232,16 @@ export async function getWafSettings(): Promise<WafSettings | null> {
 export async function saveWafSettings(s: WafSettings): Promise<void> {
   await setSetting("waf", s);
 }
+
+export type RetentionSettings = {
+  trafficRetentionDays: number; // Default: 90
+  wafRetentionDays: number;     // Default: 90
+};
+
+export async function getRetentionSettings(): Promise<RetentionSettings | null> {
+  return await getEffectiveSetting<RetentionSettings>("retention");
+}
+
+export async function saveRetentionSettings(settings: RetentionSettings): Promise<void> {
+  await setSetting("retention", settings);
+}

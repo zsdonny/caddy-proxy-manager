@@ -1,5 +1,5 @@
 import SettingsClient from "./SettingsClient";
-import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getRetentionSettings } from "@/src/lib/settings";
 import { getInstanceMode, getReplicaLastSync, getPrimaryToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvReplicaInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { requireAdmin } from "@/src/lib/auth";
@@ -11,7 +11,7 @@ export default async function SettingsPage() {
   const modeFromEnv = isInstanceModeFromEnv();
   const tokenFromEnv = isSyncTokenFromEnv();
 
-  const [general, cloudflare, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock] = await Promise.all([
+  const [general, cloudflare, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, retention] = await Promise.all([
     getGeneralSettings(),
     getCloudflareSettings(),
     getAuthentikSettings(),
@@ -21,6 +21,7 @@ export default async function SettingsPage() {
     getUpstreamDnsResolutionSettings(),
     getInstanceMode(),
     getGeoBlockSettings(),
+    getRetentionSettings(),
   ]);
 
   const [overrideGeneral, overrideCloudflare, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
@@ -57,6 +58,7 @@ export default async function SettingsPage() {
       dns={dns}
       upstreamDnsResolution={upstreamDnsResolution}
       globalGeoBlock={globalGeoBlock}
+      retention={retention}
       instanceSync={{
         mode: instanceMode,
         modeFromEnv,
