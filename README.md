@@ -26,6 +26,150 @@
 | **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
 | **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI | Fork-exclusive |
 
+## Quick Start
+
+Use the fork's pre-built GHCR images — no local build needed. Create a `.env` file with the required variables, then:
+
+```bash
+docker compose up -d
+```
+
+> [!TIP]
+> No `docker-compose.yml` bind-mount is required. The `l4-port-manager` sidecar uses **direct mode** (Docker Engine API) and handles L4 port changes automatically without it.
+
+<details>
+<summary>Full <code>docker-compose.yml</code> (fork images, composeless direct mode)</summary>
+
+```yaml
+services:
+  web:
+    container_name: caddy-proxy-manager-web
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
+      CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
+      CADDY_NETWORK_MODE: ${CADDY_NETWORK_MODE:-bridge}
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      DATABASE_PATH: /app/data/caddy-proxy-manager.db
+      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
+      NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
+    group_add:
+      - "${CADDY_GID:-10000}"
+    volumes:
+      - caddy-manager-data:/app/data
+      - geoip-data:/usr/share/GeoIP:ro,z
+      - caddy-logs:/logs:ro
+      - caddy-data:/caddy-data:ro
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  caddy:
+    container_name: caddy-proxy-manager-caddy
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "80:80/udp"
+      - "443:443"
+      - "443:443/udp"
+      # Expose L4 (TCP/UDP) ports as needed, e.g.:
+      # - "5432:5432"   # PostgreSQL
+      # - "6379:6379"   # Redis
+    environment:
+      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/logs
+      - geoip-data:/usr/share/GeoIP:ro,z
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  l4-port-manager:
+    container_name: caddy-proxy-manager-l4-ports
+    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-l4-port-manager:latest
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
+      # COMPOSE_DIR is NOT mounted — activates composeless direct mode automatically
+    volumes:
+      # Must NOT be :ro — direct mode uses the Docker Engine API to recreate the Caddy container
+      - /var/run/docker.sock:/var/run/docker.sock
+      - caddy-manager-data:/data
+    depends_on:
+      caddy:
+        condition: service_healthy
+
+  # Optional: auto-update MaxMind GeoIP databases (requires a free MaxMind account)
+  geoipupdate:
+    container_name: geoipupdate
+    image: ghcr.io/maxmind/geoipupdate
+    profiles: [geoipupdate]
+    restart: always
+    environment:
+      GEOIPUPDATE_ACCOUNT_ID: ${GEOIPUPDATE_ACCOUNT_ID:-}
+      GEOIPUPDATE_LICENSE_KEY: ${GEOIPUPDATE_LICENSE_KEY:-}
+      GEOIPUPDATE_EDITION_IDS: "GeoLite2-ASN GeoLite2-City GeoLite2-Country"
+      GEOIPUPDATE_FREQUENCY: 72
+    volumes:
+      - geoip-data:/usr/share/GeoIP:z
+    networks:
+      - caddy-network
+
+networks:
+  caddy-network:
+    driver: bridge
+
+volumes:
+  caddy-manager-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:
+  geoip-data:
+```
+
+**Required `.env` variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `SESSION_SECRET` | Cookie/session encryption key — generate with `openssl rand -base64 32` |
+| `ADMIN_USERNAME` | Initial admin login username |
+| `ADMIN_PASSWORD` | Initial admin login password (12+ chars, upper/lower/number/special) |
+
+**Optional `.env` variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BASE_URL` | `http://localhost:3000` | Public URL of the web UI |
+| `PRIMARY_DOMAIN` | `caddyproxymanager.com` | Primary domain configured in Caddy |
+| `CADDY_GID` | `10000` | GID of the Caddy process — used to grant the web container read access to Caddy logs |
+| `L4_PORT_MANAGER_POLL_INTERVAL` | `2` | Seconds between L4 trigger file checks |
+| `GEOIPUPDATE_ACCOUNT_ID` / `GEOIPUPDATE_LICENSE_KEY` | — | MaxMind credentials for GeoIP auto-updates (enable with `--profile geoipupdate`) |
+
+</details>
+
 ## Composeless L4 Port Manager (Direct Mode)
 
 The upstream `l4-port-manager` requires your `docker-compose.yml` to be bind-mounted so it can run `docker compose up` when L4 port bindings change. This is not always practical when using pre-built images from a registry.
@@ -56,95 +200,7 @@ This fork adds a **direct mode** that falls back to the Docker Engine API when n
 
 ### Compose Example
 
-<details>
-<summary>Full <code>docker-compose.yml</code> using fork web + caddy + l4-port-manager images (no bind-mount needed)</summary>
-
-```yaml
-services:
-  web:
-    container_name: caddy-proxy-manager-web
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      NODE_ENV: production
-      SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
-      CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
-      BASE_URL: ${BASE_URL:-http://localhost:3000}
-      DATABASE_PATH: /app/data/caddy-proxy-manager.db
-      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
-      NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
-    volumes:
-      - caddy-manager-data:/app/data
-      - caddy-logs:/logs:ro
-      - caddy-data:/caddy-data:ro
-    depends_on:
-      caddy:
-        condition: service_healthy
-    networks:
-      - caddy-network
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  caddy:
-    container_name: caddy-proxy-manager-caddy
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "80:80/udp"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
-    volumes:
-      - caddy-data:/data
-      - caddy-config:/config
-      - caddy-logs:/logs
-    networks:
-      - caddy-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  l4-port-manager:
-    container_name: caddy-proxy-manager-l4-ports
-    # Fork image — adds composeless direct mode
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-l4-port-manager:latest
-    restart: unless-stopped
-    environment:
-      DATA_DIR: /data
-      POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
-      # COMPOSE_DIR is not mounted — direct mode activates automatically
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # must NOT be :ro — both modes write to the socket (docker inspect, docker compose, Engine API)
-      - caddy-manager-data:/data
-    depends_on:
-      caddy:
-        condition: service_healthy
-
-networks:
-  caddy-network:
-    driver: bridge
-
-volumes:
-  caddy-manager-data:
-  caddy-data:
-  caddy-config:
-  caddy-logs:
-```
-
-</details>
+See the [Quick Start](#quick-start) section above for a complete `docker-compose.yml` using fork images in composeless direct mode.
 
 ## Macvlan Mode (Zero-Downtime L4)
 
