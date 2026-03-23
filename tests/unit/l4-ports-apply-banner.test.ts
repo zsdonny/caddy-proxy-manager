@@ -50,7 +50,8 @@ describe('L4ProxyHostsClient banner integration', () => {
 
   it('increments bannerRefresh after toggle', () => {
     // The toggle handler must signal the banner after the action completes
-    expect(client).toMatch(/toggleL4ProxyHostAction[\s\S]{0,200}signalBannerRefresh/);
+    // 600 chars to accommodate error handling + optimistic rollback between call and signal
+    expect(client).toMatch(/toggleL4ProxyHostAction[\s\S]{0,600}signalBannerRefresh/);
   });
 
   it('increments bannerRefresh when create dialog closes', () => {
