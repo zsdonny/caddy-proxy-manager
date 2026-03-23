@@ -1,0 +1,86 @@
+name: Sync caddy-blocker-plugin
+
+on:
+  schedule:
+    # Weekly on Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Fetch upstream source
+        run: |
+          git clone --depth 1 https://github.com/fuomag9/caddy-blocker-plugin /tmp/caddy-blocker-upstream
+          UPSTREAM_SHA=$(git -C /tmp/caddy-blocker-upstream rev-parse HEAD)
+          echo "UPSTREAM_SHA=${UPSTREAM_SHA}" >> "$GITHUB_ENV"
+
+      - name: Read stored SHA
+        id: stored
+        run: |
+          STORED_SHA=$(cat docker/caddy/plugins/caddy-blocker-plugin/.upstream-sha 2>/dev/null || echo "")
+          echo "STORED_SHA=${STORED_SHA}" >> "$GITHUB_ENV"
+          echo "sha=${STORED_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if [ "$UPSTREAM_SHA" = "$STORED_SHA" ]; then
+            echo "No changes detected (upstream SHA unchanged: ${UPSTREAM_SHA})"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Change detected: stored=${STORED_SHA} upstream=${UPSTREAM_SHA}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update vendored copy
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          # Remove all files except .git-related files under the plugin dir
+          find docker/caddy/plugins/caddy-blocker-plugin -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+
+          # Copy upstream files (excluding .git directory)
+          rsync -a --exclude='.git' /tmp/caddy-blocker-upstream/ docker/caddy/plugins/caddy-blocker-plugin/
+
+          # Write new upstream SHA
+          echo -n "${UPSTREAM_SHA}" > docker/caddy/plugins/caddy-blocker-plugin/.upstream-sha
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          base: develop
+          branch: chore/sync-caddy-blocker
+          title: 'chore: sync caddy-blocker-plugin from upstream'
+          commit-message: |
+            chore: sync caddy-blocker-plugin from upstream
+
+            Upstream commit: https://github.com/fuomag9/caddy-blocker-plugin/commit/${{ env.UPSTREAM_SHA }}
+            Previous SHA: ${{ env.STORED_SHA }}
+          body: |
+            ## Automated sync of `caddy-blocker-plugin`
+
+            Upstream repo: [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin)
+
+            | | SHA |
+            |---|---|
+            | **Upstream HEAD** | [`${{ env.UPSTREAM_SHA }}`](https://github.com/fuomag9/caddy-blocker-plugin/commit/${{ env.UPSTREAM_SHA }}) |
+            | **Previous** | `${{ env.STORED_SHA }}` |
+
+            ### Review checklist
+            - [ ] Check the diff for breaking changes to `blocker.go` / `l4_matcher.go` that may require updates to `src/lib/caddy.ts` or `src/lib/log-parser.ts`
+            - [ ] Verify `go.mod` module path is still `github.com/fuomag9/caddy-blocker-plugin`
+            - [ ] Merging this PR will automatically trigger a Caddy image rebuild via `docker-build-caddy.yml`
+          labels: |
+            dependencies
+            automated
