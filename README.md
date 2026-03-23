@@ -9,6 +9,8 @@
 
 # Fork Notes
 
+[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager/actions/workflows/feature-upstream-merge-check.yml)
+
 ## Changes from Upstream
 
 | Change | Description |
