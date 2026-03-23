@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/src/lib/auth";
 import { listWafEvents, countWafEvents } from "@/src/lib/models/waf-events";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();

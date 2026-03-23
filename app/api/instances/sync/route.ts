@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { applySyncPayload, getInstanceMode, getPrimaryToken, setReplicaLastSync, SyncPayload } from "@/src/lib/instance-sync";
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_MAX_SYNC_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const _parsedMaxBytes = Number(process.env.INSTANCE_SYNC_MAX_BYTES);
 const MAX_SYNC_BODY_BYTES = Number.isFinite(_parsedMaxBytes) && _parsedMaxBytes > 0

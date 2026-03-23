@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, statSync } from "node:fs";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Health check endpoint for Docker container health monitoring.
  *

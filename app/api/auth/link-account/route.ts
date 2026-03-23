@@ -3,6 +3,8 @@ import { retrieveLinkingToken, verifyLinkingToken, verifyAndLinkOAuth } from "@/
 import { createAuditEvent } from "@/src/lib/models/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

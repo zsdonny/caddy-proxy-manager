@@ -5,6 +5,8 @@ import { pendingOAuthLinks } from "@/src/lib/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { registerFailedAttempt } from "@/src/lib/rate-limit";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
   if (originCheck) return originCheck;

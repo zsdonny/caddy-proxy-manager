@@ -3,6 +3,8 @@ import { auth, checkSameOrigin } from "@/src/lib/auth";
 import { updateUserProfile } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
   if (originCheck) return originCheck;

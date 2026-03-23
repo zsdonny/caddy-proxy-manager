@@ -3,6 +3,8 @@ import { requireAdmin, checkSameOrigin } from "@/src/lib/auth";
 import { getL4PortsDiff, getL4PortsStatus, applyL4Ports } from "@/src/lib/l4-ports";
 import { config } from "@/src/lib/config";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/l4-ports — returns current port diff and apply status.
  */

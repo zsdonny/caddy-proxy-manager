@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getInstanceMode, getReplicaLastSync } from "@/src/lib/instance-sync";
 import { requireAdmin } from "@/src/lib/auth";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/instances/sync-status
  *
