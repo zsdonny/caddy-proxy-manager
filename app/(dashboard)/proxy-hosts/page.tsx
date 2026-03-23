@@ -6,6 +6,8 @@ import { listAccessLists } from "@/src/lib/models/access-lists";
 import { getAuthentikSettings } from "@/src/lib/settings";
 import { requireAdmin } from "@/src/lib/auth";
 
+
+export const dynamic = 'force-dynamic';
 const PER_PAGE = 25;
 
 interface PageProps {

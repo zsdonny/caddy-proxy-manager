@@ -4,6 +4,8 @@ import { getInstanceMode, getReplicaLastSync, getPrimaryToken, isInstanceModeFro
 import { listInstances } from "@/src/lib/models/instances";
 import { requireAdmin } from "@/src/lib/auth";
 
+
+export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   await requireAdmin();
 

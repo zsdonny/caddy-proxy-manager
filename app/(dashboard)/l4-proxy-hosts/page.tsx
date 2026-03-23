@@ -2,6 +2,8 @@ import L4ProxyHostsClient from "./L4ProxyHostsClient";
 import { listL4ProxyHostsPaginated, countL4ProxyHosts } from "@/src/lib/models/l4-proxy-hosts";
 import { requireAdmin } from "@/src/lib/auth";
 
+
+export const dynamic = 'force-dynamic';
 const PER_PAGE = 25;
 
 interface PageProps {

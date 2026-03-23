@@ -2,6 +2,8 @@ import db, { toIso } from "@/src/lib/db";
 import { requireAdmin } from "@/src/lib/auth";
 import OverviewClient from "./OverviewClient";
 import {
+
+export const dynamic = 'force-dynamic';
   accessLists,
   auditEvents,
   certificates,
@@ -12,6 +14,8 @@ import { ArrowLeftRight, ShieldCheck, KeyRound } from "lucide-react";
 import { ReactNode } from "react";
 import { getAnalyticsSummary } from "@/src/lib/analytics-db";
 
+
+export const dynamic = 'force-dynamic';
 type StatCard = {
   label: string;
   icon: ReactNode;

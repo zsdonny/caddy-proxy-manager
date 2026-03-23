@@ -8,6 +8,8 @@ import { scanAcmeCerts } from '@/src/lib/acme-certs';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 
+
+export const dynamic = 'force-dynamic';
 export type { CaCertificate };
 export type { IssuedClientCertificate };
 

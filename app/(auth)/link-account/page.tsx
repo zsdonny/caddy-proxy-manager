@@ -3,6 +3,8 @@ import { auth } from "@/src/lib/auth";
 import { peekLinkingToken, verifyLinkingToken } from "@/src/lib/services/account-linking";
 import LinkAccountClient from "./LinkAccountClient";
 
+
+export const dynamic = 'force-dynamic';
 interface LinkAccountPageProps {
   searchParams: {
     error?: string;

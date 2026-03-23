@@ -3,6 +3,8 @@ import { listAuditEvents, countAuditEvents } from "@/src/lib/models/audit";
 import { listUsers } from "@/src/lib/models/user";
 import { requireAdmin } from "@/src/lib/auth";
 
+
+export const dynamic = 'force-dynamic';
 const PER_PAGE = 50;
 
 interface PageProps {
