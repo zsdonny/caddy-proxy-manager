@@ -2,11 +2,10 @@ name: Feature/Fix Branch — Upstream Merge Check
 
 # Checks every feature/* and fix/* branch against fuomag9/caddy-proxy-manager@develop.
 # ● Step summary written on every run (readable in the Actions UI)
-# ● Pushover silent notification (priority=-1, no sound) sent ONLY when ≥1 conflict found
+# ● Silent notification (priority=-1, no sound) sent ONLY when ≥1 conflict found
 # ● GitHub Models gpt-4o-mini (free tier — no Copilot Pro quota consumed) classifies each
 #   conflicting file as FORK-EXCLUSIVE (expected divergence) vs GENUINE CLASH (needs resolution)
 #
-# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
 # Requires Git 2.38+ for `git merge-tree --write-tree` (ubuntu-latest ships Git 2.43+)
 
 on:
@@ -190,7 +189,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Send Pushover silent notification (conflicts only)
+      - name: Send silent notification (conflicts only)
         if: >
           steps.merge_check.outcome == 'success' &&
           steps.merge_check.outputs.conflict_count != '0'

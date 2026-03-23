@@ -1,6 +1,6 @@
 name: Monitor Upstream Caddy Image
 
-# Runs daily to detect upstream changes to docker/caddy/ and alert via Pushover.
+# Runs daily to detect upstream changes to docker/caddy/ and send alerts.
 # Stores the last-seen upstream SHA in docker/caddy/.upstream-sha for change detection
 # (the commit does NOT trigger a build — .upstream-sha is excluded from
 # docker-build-caddy.yml's path filter).
@@ -8,8 +8,6 @@ name: Monitor Upstream Caddy Image
 # Alerts are sent when:
 # 1. Upstream commits to docker/caddy/ (review and rebuild manually if needed)
 # 2. Upstream ships their own caddy build workflow (fork build may become redundant)
-#
-# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
 
 on:
   schedule:
@@ -17,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       test_alert:
-        description: 'Send a test Pushover alert (skips upstream checks)'
+        description: 'Send a test alert (skips upstream checks)'
         type: boolean
         default: false
 
@@ -77,7 +75,7 @@ jobs:
             echo "::notice::First run — bootstrapped upstream SHA. No alert sent."
           fi
 
-      - name: Send Pushover alert when upstream caddy image changes
+      - name: Send alert when upstream caddy image changes
         if: steps.synced.outputs.changed == 'true'
         run: |
           curl -s --fail-with-body \
@@ -99,7 +97,7 @@ jobs:
             --jq '[.[].name | select(test("caddy"; "i"))] | length > 0' 2>/dev/null || echo "false")
           echo "found=$FOUND" >> "$GITHUB_OUTPUT"
 
-      - name: Send Pushover alert if upstream now builds caddy image
+      - name: Send alert if upstream now builds caddy image
         if: steps.upstream-workflow-check.outputs.found == 'true' || inputs.test_alert == true
         run: |
           curl -s --fail-with-body \
