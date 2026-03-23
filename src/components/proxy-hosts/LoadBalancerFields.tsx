@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { Layers } from "lucide-react";
 import { useState } from "react";
 import { ProxyHost, LoadBalancingPolicy } from "@/lib/models/proxy-hosts";
 
@@ -31,21 +32,27 @@ export function LoadBalancerFields({
   const showCookieFields = policy === "cookie";
 
   return (
-    <div className="rounded-lg border border-cyan-500/60 bg-cyan-500/5 p-5">
+    <div className="rounded-lg border border-cyan-500/60 bg-cyan-500/5 p-4">
       <input type="hidden" name="lb_present" value="1" />
       <input type="hidden" name="lb_enabled_present" value="1" />
       <div className="flex flex-col gap-4">
-        <div className="flex flex-row items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Load Balancer</p>
-            <p className="text-sm text-muted-foreground">
-              Configure load balancing and health checks for multiple upstreams
-            </p>
+        <div className="flex flex-row items-start justify-between gap-2">
+          <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
+              <Layers className="h-4 w-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug">Load Balancer</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Configure load balancing and health checks for multiple upstreams
+              </p>
+            </div>
           </div>
           <Switch
             name="lb_enabled"
             checked={enabled}
             onCheckedChange={setEnabled}
+            className="shrink-0"
           />
         </div>
 

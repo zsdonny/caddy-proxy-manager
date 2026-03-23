@@ -30,7 +30,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { Globe, Layers, MapPin, Pin } from "lucide-react";
+import { Globe, Layers, Pin } from "lucide-react";
 
 function FormField({
   label,
@@ -272,15 +272,18 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultLbAccordion}
-        className="border-l-2 border-l-cyan-500 border rounded-md px-3"
+        className="rounded-lg border border-cyan-500/60 bg-cyan-500/5"
       >
         <AccordionItem value="load-balancer" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-500">
-                <Layers className="h-3.5 w-3.5" />
+          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
+                <Layers className="h-4 w-4 text-white" />
               </div>
-              Load Balancer
+              <div className="text-left">
+                <p className="text-sm font-bold leading-snug">Load Balancer</p>
+                <p className="text-sm font-normal text-muted-foreground">Configure load balancing and health checks for multiple upstreams</p>
+              </div>
             </div>
           </AccordionTrigger>
           <AccordionContent>
@@ -474,15 +477,18 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultDnsAccordion}
-        className="border-l-2 border-l-emerald-500 border rounded-md px-3"
+        className="rounded-lg border border-emerald-500/60 bg-emerald-500/5"
       >
         <AccordionItem value="dns-resolver" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-500">
-                <Globe className="h-3.5 w-3.5" />
+          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+                <Globe className="h-4 w-4 text-white" />
               </div>
-              Custom DNS Resolvers
+              <div className="text-left">
+                <p className="text-sm font-bold leading-snug">Custom DNS Resolvers</p>
+                <p className="text-sm font-normal text-muted-foreground">Configure per-host DNS resolution for upstream discovery</p>
+              </div>
             </div>
           </AccordionTrigger>
           <AccordionContent>
@@ -545,15 +551,18 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultGeoblockAccordion}
-        className="border-l-2 border-l-rose-500 border rounded-md px-3"
+        className="rounded-lg border border-rose-500/60 bg-rose-500/5"
       >
         <AccordionItem value="geoblock" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded border border-rose-500/30 bg-rose-500/10 text-rose-500">
-                <MapPin className="h-3.5 w-3.5" />
+          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-rose-500 flex items-center justify-center shrink-0">
+                <Globe className="h-4 w-4 text-white" />
               </div>
-              Geo Blocking
+              <div className="text-left">
+                <p className="text-sm font-bold leading-snug">Geo Blocking</p>
+                <p className="text-sm font-normal text-muted-foreground">Block or allow traffic by country, continent, ASN, CIDR, or IP</p>
+              </div>
             </div>
           </AccordionTrigger>
           <AccordionContent>
@@ -723,15 +732,18 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultUpstreamDnsAccordion}
-        className="border-l-2 border-l-violet-500 border rounded-md px-3"
+        className="rounded-lg border border-violet-500/60 bg-violet-500/5"
       >
         <AccordionItem value="upstream-dns" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded border border-violet-500/30 bg-violet-500/10 text-violet-500">
-                <Pin className="h-3.5 w-3.5" />
+          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-violet-500 flex items-center justify-center shrink-0">
+                <Pin className="h-4 w-4 text-white" />
               </div>
-              Upstream DNS Pinning
+              <div className="text-left">
+                <p className="text-sm font-bold leading-snug">Upstream DNS Pinning</p>
+                <p className="text-sm font-normal text-muted-foreground">Pin upstream DNS resolution to concrete IP addresses at config time</p>
+              </div>
             </div>
           </AccordionTrigger>
           <AccordionContent>
