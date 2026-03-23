@@ -13,14 +13,16 @@
 
 ## Changes from Upstream
 
-| Change | Description |
-|--------|-------------|
-| **UDP L4 proxy fix** | L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to both the caddy-l4 listen address and each upstream dial address |
-| **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` |
-| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` |
-| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest` |
-| **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads |
-| **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them |
+**Last upstream sync:** 2026-03-23 — merged upstream's shadcn/ui rewrite (MUI → shadcn/ui + Tailwind CSS), L4 UDP routing fixes, E2E test updates, and updated screenshots.
+
+| Change | Description | Status |
+|--------|-------------|--------|
+| **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
+| **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` | Fork-exclusive |
+| **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest` | Fork-exclusive |
+| **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
+| **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them | Fork-exclusive |
+| ~~**UDP L4 proxy fix**~~ | ~~L4 proxy hosts with UDP protocol now correctly prepend the `udp/` prefix to listen and dial addresses~~ | Upstreamed (2026-03-22) |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
