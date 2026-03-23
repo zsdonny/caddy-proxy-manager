@@ -88,9 +88,9 @@ function WafBadge({ host }: { host: ProxyHost }) {
   if (hasOverride) popoverLines.push("Override global WAF");
   if (hasCustom) popoverLines.push("Custom SecLang directives");
   const badge = (
-    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 relative">
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 relative">
       <ShieldAlert className="h-2.5 w-2.5 mr-0.5" />WAF
-      {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-300" />}
+      {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
     </Badge>
   );
   if (!showDot) return badge;
@@ -123,7 +123,7 @@ function ProxyFeatureBadges({ host }: { host: ProxyHost }) {
 }
 
 const PROXY_FEATURE_FILTERS = [
-  "TLS", "Auth", "Authentik", "WAF", "mTLS", "GeoBlock", "LB", "DNS", "Redirect", "Rewrite", "Custom RP", "Pre-Handler",
+  "Auth", "Authentik", "WAF", "mTLS", "GeoBlock", "LB", "DNS", "Redirect", "Rewrite", "Custom RP", "Pre-Handler",
 ] as const;
 type ProxyFeatureKey = (typeof PROXY_FEATURE_FILTERS)[number];
 
@@ -168,6 +168,20 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         return false;
       });
 
+  const PROXY_FILTER_ICONS: Record<ProxyFeatureKey, React.ReactNode> = {
+    "Auth":        <ShieldCheck  className="h-3.5 w-3.5 text-amber-500" />,
+    "Authentik":   <KeyRound     className="h-3.5 w-3.5" />,
+    "WAF":         <ShieldAlert  className="h-3.5 w-3.5 text-red-400" />,
+    "mTLS":        <LockKeyhole  className="h-3.5 w-3.5 text-amber-500" />,
+    "GeoBlock":    <Globe        className="h-3.5 w-3.5 text-rose-500" />,
+    "LB":          <Scale        className="h-3.5 w-3.5 text-cyan-500" />,
+    "DNS":         <Waypoints    className="h-3.5 w-3.5 text-emerald-500" />,
+    "Redirect":    <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground" />,
+    "Rewrite":     <PenLine      className="h-3.5 w-3.5 text-muted-foreground" />,
+    "Custom RP":   <FileJson     className="h-3.5 w-3.5 text-muted-foreground" />,
+    "Pre-Handler": <Workflow     className="h-3.5 w-3.5 text-muted-foreground" />,
+  };
+
   const featuresHeaderContent = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -187,7 +201,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
             onCheckedChange={() => toggleFeatureFilter(key)}
             onSelect={(e) => e.preventDefault()}
           >
-            {key}
+            <span className="flex items-center gap-2">{PROXY_FILTER_ICONS[key]}{key}</span>
           </DropdownMenuCheckboxItem>
         ))}
         {featureFilters.size > 0 && (

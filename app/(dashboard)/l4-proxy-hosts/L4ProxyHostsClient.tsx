@@ -136,6 +136,15 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
         return false;
       });
 
+  const L4_FILTER_ICONS: Record<L4FeatureKey, React.ReactNode> = {
+    "TLS":        <Lock      className="h-3.5 w-3.5 text-cyan-500" />,
+    "ProxyProto": <Cable     className="h-3.5 w-3.5 text-muted-foreground" />,
+    "GeoBlock":   <Globe     className="h-3.5 w-3.5 text-rose-500" />,
+    "LB":         <Scale     className="h-3.5 w-3.5 text-cyan-500" />,
+    "DNS":        <Waypoints className="h-3.5 w-3.5 text-emerald-500" />,
+    "DNS Pin":    <Pin       className="h-3.5 w-3.5 text-violet-500" />,
+  };
+
   const featuresHeaderContent = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -147,7 +156,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-40">
+      <DropdownMenuContent align="start" className="w-44">
         {L4_FEATURE_FILTERS.map((key) => (
           <DropdownMenuCheckboxItem
             key={key}
@@ -155,7 +164,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
             onCheckedChange={() => toggleFeatureFilter(key)}
             onSelect={(e) => e.preventDefault()}
           >
-            {key}
+            <span className="flex items-center gap-2">{L4_FILTER_ICONS[key]}{key}</span>
           </DropdownMenuCheckboxItem>
         ))}
         {featureFilters.size > 0 && (
