@@ -6,6 +6,7 @@ import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import * as schema from "./db/schema";
 
 const DEFAULT_SQLITE_URL = "file:./data/caddy-proxy-manager.db";
+const IS_BUILD_PHASE = process.env.NEXT_PHASE === "phase-production-build";
 
 type GlobalForDrizzle = typeof globalThis & {
   __DRIZZLE_DB__?: ReturnType<typeof drizzle<typeof schema>>;
@@ -67,11 +68,25 @@ const sqlite =
     // busy_timeout prevents SQLITE_BUSY on contention, synchronous=NORMAL
     // is safe with WAL and reduces fsync overhead, cache_size gives 8 MB page cache.
     if (sqlitePath !== ":memory:") {
-      client.exec("PRAGMA journal_mode = WAL;");
       client.exec("PRAGMA busy_timeout = 5000;");
+      try {
+        client.exec("PRAGMA journal_mode = WAL;");
+      } catch (error: unknown) {
+        if (
+          IS_BUILD_PHASE &&
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "SQLITE_BUSY"
+        ) {
+          console.warn("[db] SQLite busy while enabling WAL during build; continuing with current journal mode");
+        } else {
+          throw error;
+        }
+      }
       client.exec("PRAGMA synchronous = NORMAL;");
       client.exec("PRAGMA cache_size = -8000;");
-      console.log("[db] WAL mode enabled, busy_timeout=5000, cache=8MB");
+      console.log("[db] busy_timeout=5000, cache=8MB, WAL requested");
     }
     return client;
   })();
@@ -115,6 +130,16 @@ function runMigrations() {
       globalForDrizzle.__MIGRATIONS_RAN__ = true;
       return;
     }
+    if (
+      IS_BUILD_PHASE &&
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "SQLITE_BUSY"
+    ) {
+      console.warn("[db] SQLite busy while running migrations during build; deferring migrations to runtime");
+      return;
+    }
     throw error;
   }
 }
@@ -125,7 +150,7 @@ try {
   console.error("Failed to run database migrations:", error);
   // In build mode, allow the build to continue even if migrations fail
   // The runtime initialization will handle migrations properly
-  if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PHASE === 'phase-production-build') {
+  if (process.env.NODE_ENV !== 'production' || IS_BUILD_PHASE) {
     console.warn('Continuing despite migration error during build phase');
   } else {
     throw error;
