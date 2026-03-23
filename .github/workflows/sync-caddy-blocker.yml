@@ -12,7 +12,7 @@ name: Sync caddy-blocker-plugin
 
 on:
   schedule:
-    - cron: '0 * * * *'   # Hourly
+    - cron: '0 9 * * *'   # Daily at 09:00 UTC
   workflow_dispatch:
 
 env:

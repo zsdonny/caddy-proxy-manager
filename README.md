@@ -7,7 +7,7 @@
 > [!NOTE]
 > This is a fork of [fuomag9/caddy-proxy-manager](https://github.com/fuomag9/caddy-proxy-manager). The section below documents changes made in this fork. The original upstream README is collapsed at the bottom of the page.
 >
-> The Caddy image includes a vendored copy of [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin) (Geo/IP-based request blocking), built via xcaddy local replace. An [hourly sync workflow](.github/workflows/sync-caddy-blocker.yml) keeps it up to date.
+> The Caddy image includes a vendored copy of [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin) (Geo/IP-based request blocking), built via xcaddy local replace. A [daily sync workflow](.github/workflows/sync-caddy-blocker.yml) keeps it up to date.
 
 # Fork Notes
 
