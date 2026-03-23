@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
+import { revalidatePath } from "next/cache";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync, SyncPayload } from "@/src/lib/instance-sync";
 
@@ -302,6 +303,7 @@ export async function POST(request: NextRequest) {
     await applySyncPayload(normalizedPayload);
     await applyCaddyConfig();
     await setSlaveLastSync({ ok: true });
+    revalidatePath("/", "layout");
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to apply sync payload";
