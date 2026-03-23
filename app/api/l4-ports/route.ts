@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, checkSameOrigin } from "@/src/lib/auth";
 import { getL4PortsDiff, getL4PortsStatus, applyL4Ports } from "@/src/lib/l4-ports";
+import { config } from "@/src/lib/config";
 
 /**
  * GET /api/l4-ports — returns current port diff and apply status.
@@ -12,7 +13,7 @@ export async function GET() {
       getL4PortsDiff(),
       getL4PortsStatus(),
     ]);
-    return NextResponse.json({ diff, status });
+    return NextResponse.json({ diff, status, networkMode: config.caddyNetworkMode });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

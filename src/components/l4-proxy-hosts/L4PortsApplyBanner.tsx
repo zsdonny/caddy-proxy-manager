@@ -22,6 +22,7 @@ type PortsStatus = {
 type PortsResponse = {
   diff: PortsDiff;
   status: PortsStatus;
+  networkMode?: string;
   error?: string;
 };
 
@@ -80,6 +81,9 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
   };
 
   if (!data) return null;
+
+  // In macvlan mode, L4 port changes are instant — no banner needed
+  if (data.networkMode && data.networkMode !== "bridge") return null;
 
   const { diff, status } = data;
 

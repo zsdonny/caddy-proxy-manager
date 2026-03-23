@@ -1,3 +1,28 @@
+# =============================================================================
+# Macvlan mode — standalone compose file for Portainer and CLI use
+# =============================================================================
+#
+# USE THIS FILE when you want zero-downtime L4 port changes.
+# Caddy gets its own LAN IP via macvlan — no Docker port mappings needed.
+# L4 port changes become instant Caddy config reloads (no container restart).
+#
+# Portainer: paste this file into the stack editor instead of docker-compose.yml
+# CLI:       docker compose -f docker-compose.macvlan.yml up -d
+#
+# REQUIRED env vars (set in Portainer environment or .env):
+#   SESSION_SECRET      - generate: openssl rand -base64 32
+#   ADMIN_USERNAME      - login username
+#   ADMIN_PASSWORD      - login password (12+ chars, upper/lower/number/special)
+#   MACVLAN_PARENT      - host NIC the macvlan attaches to (e.g. ens3, eth0)
+#   MACVLAN_SUBNET      - your LAN subnet (e.g. 192.168.1.0/24)
+#   MACVLAN_GATEWAY     - your LAN gateway (e.g. 192.168.1.1)
+#   MACVLAN_IP_RANGE    - IP range to assign from (e.g. 192.168.1.200/30)
+#   CADDY_MACVLAN_IP    - static IP for Caddy on LAN (e.g. 192.168.1.200)
+#
+# NOTE: Host cannot reach the macvlan IP directly. Use a macvlan shim if needed.
+# NOTE: The l4-port-manager sidecar is not included — macvlan mode does not need it.
+# =============================================================================
+
 services:
   web:
     container_name: caddy-proxy-manager-web
@@ -6,46 +31,21 @@ services:
       context: .
       dockerfile: docker/web/Dockerfile
       args:
-        # User and group IDs for rootless operation
-        # Set these to match your host user to avoid permission issues
-        # Find your UID/GID with: id -u / id -g
         PUID: ${PUID:-10001}
         PGID: ${PGID:-10001}
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      # Node environment
       NODE_ENV: production
-
-      # REQUIRED: Session secret for encrypting cookies and sessions
-      # Generate with: openssl rand -base64 32
-      # SECURITY: You MUST set this to a unique value in production!
       SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
-
-      # Caddy API endpoint (internal communication)
       CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
-
-      # L4 port management mode (bridge or macvlan — see .env.example)
-      CADDY_NETWORK_MODE: ${CADDY_NETWORK_MODE:-bridge}
-
-      # Public base URL for the application
       BASE_URL: ${BASE_URL:-http://localhost:3000}
-
-      # Database configuration
       DATABASE_PATH: /app/data/caddy-proxy-manager.db
       DATABASE_URL: file:/app/data/caddy-proxy-manager.db
-
-      # NextAuth configuration
       NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
-
-      # REQUIRED: Admin credentials for login
-      # SECURITY: You MUST set these to secure values in production!
-      # Password must be 12+ chars with uppercase, lowercase, numbers, and special chars
       ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
-
-      # OAuth2/OIDC Authentication (Optional - works with Authentik, Authelia, Keycloak, etc.)
       OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
       OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-OAuth2}
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
@@ -55,8 +55,10 @@ services:
       OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
+      # Macvlan mode — L4 port changes are instant via Caddy config reload
+      CADDY_NETWORK_MODE: macvlan
     group_add:
-      - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read /logs/access.log
+      - "${CADDY_GID:-10000}"
     volumes:
       - caddy-manager-data:/app/data
       - geoip-data:/usr/share/GeoIP:ro,z
@@ -81,27 +83,12 @@ services:
       context: .
       dockerfile: docker/caddy/Dockerfile
       args:
-        # User and group IDs for rootless operation
-        # Set these to match your host user to avoid permission issues
-        # Find your UID/GID with: id -u / id -g
         PUID: ${PUID:-10000}
         PGID: ${PGID:-10000}
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "80:80/udp"
-      - "443:443"
-      - "443:443/udp"
-      # L4 (TCP/UDP) proxy ports — expose as needed for L4 proxy hosts, e.g.:
-      # - "5432:5432"     # PostgreSQL
-      # - "3306:3306"     # MySQL
-      # - "6379:6379"     # Redis
-      # Admin API (port 2019) is only exposed on internal network for security
-      # Web UI accesses via http://caddy:2019 internally
-      # Uncomment the line below to expose metrics externally for Grafana/Prometheus
-      # - "9090:9090"  # Metrics available at http://localhost:9090/metrics (configure in Settings first)
+    # No ports: — caddy binds directly via macvlan IP, no host port mapping needed.
+    # All ports (80, 443, L4) are accessible at CADDY_MACVLAN_IP on your LAN.
     environment:
-      # Primary domain for Caddy configuration
       PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
     volumes:
       - caddy-data:/data
@@ -109,34 +96,20 @@ services:
       - caddy-logs:/logs
       - geoip-data:/usr/share/GeoIP:ro,z
     networks:
-      - caddy-network
+      caddy-network: {}
+      caddy-macvlan:
+        ipv4_address: ${CADDY_MACVLAN_IP:?ERROR - CADDY_MACVLAN_IP is required in macvlan mode}
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
+      # Try localhost first (works before web app configures Caddy),
+      # then fall back to each container IP (works after admin is rebound to bridge IP).
+      test: ["CMD", "sh", "-c", "for ip in localhost $(hostname -i); do wget -qO /dev/null http://$ip:2019/config/ 2>/dev/null && exit 0; done; exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
-  # L4 Port Manager sidecar — automatically recreates the caddy container
-  # when L4 proxy host ports change.
-  # Requires Docker socket access (read-only) to recreate the caddy container.
-  l4-port-manager:
-    container_name: caddy-proxy-manager-l4-ports
-    build:
-      context: .
-      dockerfile: docker/l4-port-manager/Dockerfile
-    restart: unless-stopped
-    environment:
-      DATA_DIR: /data
-      COMPOSE_DIR: /compose
-      POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - caddy-manager-data:/data
-      - .:/compose:ro
-    depends_on:
-      caddy:
-        condition: service_healthy
+  # l4-port-manager is intentionally absent in macvlan mode.
+  # L4 port changes are handled by Caddy config reload — no container recreation needed.
 
   geoipupdate:
     container_name: geoipupdate-${HOSTNAME}
@@ -156,6 +129,15 @@ services:
 networks:
   caddy-network:
     driver: bridge
+  caddy-macvlan:
+    driver: macvlan
+    driver_opts:
+      parent: ${MACVLAN_PARENT:?ERROR - MACVLAN_PARENT is required (e.g. ens3, eth0)}
+    ipam:
+      config:
+        - subnet: ${MACVLAN_SUBNET:?ERROR - MACVLAN_SUBNET is required (e.g. 192.168.1.0/24)}
+          gateway: ${MACVLAN_GATEWAY:?ERROR - MACVLAN_GATEWAY is required (e.g. 192.168.1.1)}
+          ip_range: ${MACVLAN_IP_RANGE:?ERROR - MACVLAN_IP_RANGE is required (e.g. 192.168.1.200/30)}
 
 volumes:
   caddy-manager-data:
