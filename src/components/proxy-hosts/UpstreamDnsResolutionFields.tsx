@@ -2,7 +2,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pin } from "lucide-react";
 import { useState } from "react";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
 
@@ -38,13 +38,18 @@ export function UpstreamDnsResolutionFields({
     : `Override: ${currentMode === "inherit" ? "inherit mode" : currentMode}, ${currentFamily === "inherit" ? "inherit family" : currentFamily}`;
 
   return (
-    <div className="rounded-lg border border-violet-500/60 bg-violet-500/5 p-5">
+    <div className="rounded-lg border border-violet-500/60 bg-violet-500/5 p-4">
       <input type="hidden" name="upstream_dns_resolution_present" value="1" />
       <div className="flex flex-col gap-4">
-        <div className="flex flex-row items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Upstream DNS Pinning</p>
-            <p className="text-sm text-muted-foreground">{summary}</p>
+        <div className="flex flex-row items-start justify-between gap-2">
+          <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 w-8 h-8 rounded-xl bg-violet-500 flex items-center justify-center shrink-0">
+              <Pin className="h-4 w-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug">Upstream DNS Pinning</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{summary}</p>
+            </div>
           </div>
           <Button
             type="button"
@@ -52,7 +57,7 @@ export function UpstreamDnsResolutionFields({
             size="icon"
             aria-label={expanded ? "Collapse upstream DNS pinning options" : "Expand upstream DNS pinning options"}
             onClick={() => setExpanded(prev => !prev)}
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
           >
             <ChevronDown className={cn(
               "h-4 w-4 transition-transform duration-200",

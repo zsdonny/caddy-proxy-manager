@@ -3,6 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Globe } from "lucide-react";
 import { useState } from "react";
 import { ProxyHost } from "@/lib/models/proxy-hosts";
 
@@ -15,21 +16,27 @@ export function DnsResolverFields({
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
 
   return (
-    <div className="rounded-lg border border-emerald-500/60 bg-emerald-500/5 p-5">
+    <div className="rounded-lg border border-emerald-500/60 bg-emerald-500/5 p-4">
       <input type="hidden" name="dns_present" value="1" />
       <input type="hidden" name="dns_enabled_present" value="1" />
       <div className="flex flex-col gap-4">
-        <div className="flex flex-row items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Custom DNS Resolvers</p>
-            <p className="text-sm text-muted-foreground">
-              Configure per-host DNS resolution for upstream discovery and health checks
-            </p>
+        <div className="flex flex-row items-start justify-between gap-2">
+          <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+              <Globe className="h-4 w-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug">Custom DNS Resolvers</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Configure per-host DNS resolution for upstream discovery and health checks
+              </p>
+            </div>
           </div>
           <Switch
             name="dns_enabled"
             checked={enabled}
             onCheckedChange={setEnabled}
+            className="shrink-0"
           />
         </div>
 
