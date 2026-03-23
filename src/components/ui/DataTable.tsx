@@ -22,6 +22,7 @@ export type Column<T> = {
   width?: string | number;
   sortKey?: string;
   render?: (row: T) => ReactNode;
+  headerContent?: ReactNode;
 };
 
 type DataTableProps<T> = {
@@ -85,6 +86,7 @@ function SortableHeader({ col, sort }: { col: Column<unknown>; sort?: { sortBy: 
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  if (col.headerContent) return <>{col.headerContent}</>;
   if (!col.sortKey) return <>{col.label}</>;
 
   const isActive = sort?.sortBy === col.sortKey;

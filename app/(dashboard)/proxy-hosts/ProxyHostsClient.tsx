@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, MoreHorizontal, ArrowRight, Shield } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, Lock, ShieldCheck, KeyRound, ShieldAlert, LockKeyhole, Scale, Waypoints, CornerDownRight, PenLine, FileJson, Workflow, ListFilter } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -21,10 +21,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type Props = {
   hosts: ProxyHost[];
@@ -37,12 +43,164 @@ type Props = {
   initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
 };
 
+function getGeoLabel(host: ProxyHost): string | null {
+  if (!host.geoblock?.enabled) return null;
+  const hasCountry = (host.geoblock.block_countries?.length ?? 0) > 0 || (host.geoblock.allow_countries?.length ?? 0) > 0;
+  const hasCidr = (host.geoblock.block_cidrs?.length ?? 0) > 0 || (host.geoblock.allow_cidrs?.length ?? 0) > 0;
+  if (hasCountry && hasCidr) return "Country/CIDR";
+  if (hasCountry) return "Country";
+  if (hasCidr) return "CIDR";
+  return "Geo";
+}
+
+function GeoBlockBadge({ host }: { host: ProxyHost }) {
+  const label = getGeoLabel(host);
+  if (!label) return null;
+  const hasOverride = host.geoblock_mode === "override";
+  const hasCustomBlock = (host.geoblock?.response_body && host.geoblock.response_body !== "Forbidden") || !!host.geoblock?.redirect_url;
+  const showDot = hasOverride || hasCustomBlock;
+  const popoverLines: string[] = [];
+  if (hasOverride) popoverLines.push("Override global geo blocking");
+  if (hasCustomBlock) popoverLines.push(host.geoblock?.redirect_url ? "Custom redirect URL" : "Custom block page");
+  const badge = (
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 relative">
+      <Globe className="h-2.5 w-2.5 mr-0.5" />{label}
+      {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-rose-500" />}
+    </Badge>
+  );
+  if (!showDot) return badge;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{badge}</PopoverTrigger>
+      <PopoverContent className="w-auto p-2 text-xs space-y-0.5">
+        {popoverLines.map((line) => <p key={line} className="font-medium">{line}</p>)}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function WafBadge({ host }: { host: ProxyHost }) {
+  if (!host.waf?.enabled) return null;
+  const hasCustom = !!host.waf.custom_directives;
+  const hasOverride = host.waf.waf_mode === "override";
+  const showDot = hasCustom || hasOverride;
+  const popoverLines: string[] = [];
+  if (hasOverride) popoverLines.push("Override global WAF");
+  if (hasCustom) popoverLines.push("Custom SecLang directives");
+  const badge = (
+    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 relative">
+      <ShieldAlert className="h-2.5 w-2.5 mr-0.5" />WAF
+      {showDot && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-300" />}
+    </Badge>
+  );
+  if (!showDot) return badge;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{badge}</PopoverTrigger>
+      <PopoverContent className="w-auto p-2 text-xs space-y-0.5">
+        {popoverLines.map((line) => <p key={line} className="font-medium">{line}</p>)}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ProxyFeatureBadges({ host }: { host: ProxyHost }) {
+  const badges: React.ReactNode[] = [];
+  if (host.certificate_id) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
+  if (host.access_list_id) badges.push(<Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" />Auth</Badge>);
+  if (host.authentik?.enabled) badges.push(<Badge key="authentik" variant="default" className="text-[10px] px-1.5 py-0"><KeyRound className="h-2.5 w-2.5 mr-0.5" />Authentik</Badge>);
+  if (host.waf?.enabled) badges.push(<WafBadge key="waf" host={host} />);
+  if (host.mtls?.enabled) badges.push(<Badge key="mtls" variant="warning" className="text-[10px] px-1.5 py-0"><LockKeyhole className="h-2.5 w-2.5 mr-0.5" />mTLS</Badge>);
+  if (host.geoblock?.enabled) badges.push(<GeoBlockBadge key="geo" host={host} />);
+  if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
+  if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
+  if (host.redirects?.length > 0) badges.push(<Badge key="redirect" variant="muted" className="text-[10px] px-1.5 py-0"><CornerDownRight className="h-2.5 w-2.5 mr-0.5" />Redirect</Badge>);
+  if (host.rewrite?.path_prefix) badges.push(<Badge key="rewrite" variant="muted" className="text-[10px] px-1.5 py-0"><PenLine className="h-2.5 w-2.5 mr-0.5" />Rewrite</Badge>);
+  if (host.custom_reverse_proxy_json) badges.push(<Badge key="crp" variant="muted" className="text-[10px] px-1.5 py-0"><FileJson className="h-2.5 w-2.5 mr-0.5" />Custom RP</Badge>);
+  if (host.custom_pre_handlers_json) badges.push(<Badge key="pre" variant="muted" className="text-[10px] px-1.5 py-0"><Workflow className="h-2.5 w-2.5 mr-0.5" />Pre-Handler</Badge>);
+  if (badges.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  return <div className="flex flex-wrap gap-1">{badges}</div>;
+}
+
+const PROXY_FEATURE_FILTERS = [
+  "TLS", "Auth", "Authentik", "WAF", "mTLS", "GeoBlock", "LB", "DNS", "Redirect", "Rewrite", "Custom RP", "Pre-Handler",
+] as const;
+type ProxyFeatureKey = (typeof PROXY_FEATURE_FILTERS)[number];
+
+function getProxyHostFeatures(host: ProxyHost): Set<ProxyFeatureKey> {
+  const f = new Set<ProxyFeatureKey>();
+  if (host.certificate_id) f.add("TLS");
+  if (host.access_list_id) f.add("Auth");
+  if (host.authentik?.enabled) f.add("Authentik");
+  if (host.waf?.enabled) f.add("WAF");
+  if (host.mtls?.enabled) f.add("mTLS");
+  if (host.geoblock?.enabled) f.add("GeoBlock");
+  if (host.load_balancer?.enabled) f.add("LB");
+  if (host.dns_resolver?.enabled) f.add("DNS");
+  if (host.redirects?.length > 0) f.add("Redirect");
+  if (host.rewrite?.path_prefix) f.add("Rewrite");
+  if (host.custom_reverse_proxy_json) f.add("Custom RP");
+  if (host.custom_pre_handlers_json) f.add("Pre-Handler");
+  return f;
+}
+
 export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [featureFilters, setFeatureFilters] = useState<Set<ProxyFeatureKey>>(new Set());
+
+  const toggleFeatureFilter = (key: ProxyFeatureKey) => {
+    setFeatureFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const filteredHosts = featureFilters.size === 0
+    ? hosts
+    : hosts.filter((h) => {
+        const features = getProxyHostFeatures(h);
+        for (const f of featureFilters) { if (features.has(f)) return true; }
+        return false;
+      });
+
+  const featuresHeaderContent = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium">
+          Features
+          <ListFilter className={`ml-1 h-3.5 w-3.5 ${featureFilters.size > 0 ? "text-primary" : "opacity-50"}`} />
+          {featureFilters.size > 0 && (
+            <span className="ml-0.5 text-[10px] rounded-full bg-primary text-primary-foreground px-1">{featureFilters.size}</span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {PROXY_FEATURE_FILTERS.map((key) => (
+          <DropdownMenuCheckboxItem
+            key={key}
+            checked={featureFilters.has(key)}
+            onCheckedChange={() => toggleFeatureFilter(key)}
+            onSelect={(e) => e.preventDefault()}
+          >
+            {key}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {featureFilters.size > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setFeatureFilters(new Set())}>
+              Clear filters
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   const router = useRouter();
   const pathname = usePathname();
@@ -118,21 +276,8 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
     {
       id: "features",
       label: "Features",
-      render: (host: ProxyHost) => (
-        <div className="flex flex-wrap gap-1">
-          {host.certificate_id && (
-            <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>
-          )}
-          {host.access_list_id && (
-            <Badge variant="warning" className="text-[10px] px-1.5 py-0">
-              <Shield className="h-2.5 w-2.5 mr-0.5" />Auth
-            </Badge>
-          )}
-          {!host.certificate_id && !host.access_list_id && (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-        </div>
-      ),
+      headerContent: featuresHeaderContent,
+      render: (host: ProxyHost) => <ProxyFeatureBadges host={host} />,
     },
     {
       id: "status",
@@ -240,7 +385,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
 
       <DataTable
         columns={columns}
-        data={hosts}
+        data={filteredHosts}
         keyField="id"
         emptyMessage={searchTerm ? "No hosts match your search" : "No proxy hosts found"}
         pagination={pagination}
