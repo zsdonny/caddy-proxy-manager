@@ -5,7 +5,7 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
@@ -733,5 +733,24 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
   } catch (error) {
     console.error("Failed to save WAF settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save WAF settings" };
+  }
+}
+
+export async function updateRetentionSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const trafficStr = formData.get("trafficRetentionDays") ? String(formData.get("trafficRetentionDays")).trim() : "";
+    const wafStr = formData.get("wafRetentionDays") ? String(formData.get("wafRetentionDays")).trim() : "";
+
+    const trafficRetentionDays = trafficStr && !isNaN(Number(trafficStr)) ? Math.max(1, Math.min(365, Math.round(Number(trafficStr)))) : 90;
+    const wafRetentionDays = wafStr && !isNaN(Number(wafStr)) ? Math.max(1, Math.min(365, Math.round(Number(wafStr)))) : 90;
+
+    await saveRetentionSettings({ trafficRetentionDays, wafRetentionDays });
+    revalidatePath("/settings");
+    return { success: true, message: "Retention settings saved successfully" };
+  } catch (error) {
+    console.error("Failed to save retention settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save retention settings" };
   }
 }
