@@ -235,14 +235,17 @@ jobs:
               '.[] | select(.branch == $b) | .conflicts[]' \
               /tmp/merge-results.json | \
             while IFS= read -r FILE; do
+              # Truncate each diff to 20 lines — enough context for classification;
+              # full 150-line diff is preserved in the artifact for human review.
               DIFF=$(jq -r --arg b "$BRANCH_NAME" --arg f "$FILE" \
                 '.[] | select(.branch == $b) | .diffs[$f] // "(diff unavailable)"' \
-                /tmp/merge-results.json)
+                /tmp/merge-results.json | head -n 20)
               printf '**%s:**\n```diff\n%s\n```\n\n' "$FILE" "$DIFF" >> "$PROMPT_FILE"
             done
           done
 
-          PROMPT_CONTENT=$(cat "$PROMPT_FILE")
+          # Hard cap at 22000 chars (~5500 tokens) so the payload never exceeds 8000 tokens
+          PROMPT_CONTENT=$(head -c 22000 "$PROMPT_FILE")
 
           PAYLOAD=$(jq -n \
             --arg prompt "$PROMPT_CONTENT" \
