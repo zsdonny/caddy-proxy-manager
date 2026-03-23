@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFormState } from "react-dom";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin,
@@ -33,11 +35,11 @@ import {
   updateDnsSettingsAction,
   updateUpstreamDnsResolutionSettingsAction,
   updateInstanceModeAction,
-  updateSlaveMasterTokenAction,
-  createSlaveInstanceAction,
-  deleteSlaveInstanceAction,
-  toggleSlaveInstanceAction,
-  syncSlaveInstancesAction,
+  updateReplicaPrimaryTokenAction,
+  createReplicaInstanceAction,
+  deleteReplicaInstanceAction,
+  toggleReplicaInstanceAction,
+  syncReplicaInstancesAction,
   updateGeoBlockSettingsAction,
 } from "./actions";
 import { ReactNode } from "react";
@@ -135,7 +137,7 @@ type Props = {
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
   instanceSync: {
-    mode: "standalone" | "master" | "slave";
+    mode: "standalone" | "primary" | "replica";
     modeFromEnv: boolean;
     tokenFromEnv: boolean;
     overrides: {
@@ -147,12 +149,12 @@ type Props = {
       dns: boolean;
       upstreamDnsResolution: boolean;
     };
-    slave: {
+    replica: {
       hasToken: boolean;
       lastSyncAt: string | null;
       lastSyncError: string | null;
     } | null;
-    master: {
+    primary: {
       instances: Array<{
         id: number;
         name: string;
@@ -192,13 +194,40 @@ export default function SettingsClient({
     updateUpstreamDnsResolutionSettingsAction, null
   );
   const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
-  const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
-  const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
-  const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
+  const [replicaTokenState, replicaTokenFormAction] = useFormState(updateReplicaPrimaryTokenAction, null);
+  const [replicaInstanceState, replicaInstanceFormAction] = useFormState(createReplicaInstanceAction, null);
+  const [syncState, syncFormAction] = useFormState(syncReplicaInstancesAction, null);
   const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
 
-  const isSlave = instanceSync.mode === "slave";
-  const isMaster = instanceSync.mode === "master";
+  const isReplica = instanceSync.mode === "replica";
+  const isPrimary = instanceSync.mode === "primary";
+
+  // Poll /api/instances/sync-status every 15s when in replica mode.
+  // Notify the user and refresh server data when the sync timestamp changes.
+  const lastKnownSyncAt = useRef<string | null>(instanceSync.replica?.lastSyncAt ?? null);
+  const router = useRouter();
+  useEffect(() => {
+    if (!isReplica) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch("/api/instances/sync-status");
+        if (!res.ok) return;
+        const data = await res.json() as { lastSyncAt: string | null; lastSyncError: string | null };
+        if (data.lastSyncAt && data.lastSyncAt !== lastKnownSyncAt.current) {
+          lastKnownSyncAt.current = data.lastSyncAt;
+          router.refresh();
+          if (data.lastSyncError) {
+            toast.warning(`Sync from primary failed: ${data.lastSyncError}`);
+          } else {
+            toast.info("Configuration synced from primary.");
+          }
+        }
+      } catch {
+        // network error during polling — silently ignore
+      }
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [isReplica, router]);
   const [generalOverride, setGeneralOverride] = useState(instanceSync.overrides.general);
   const [cloudflareOverride, setCloudflareOverride] = useState(instanceSync.overrides.cloudflare);
   const [authentikOverride, setAuthentikOverride] = useState(instanceSync.overrides.authentik);
@@ -220,7 +249,7 @@ export default function SettingsClient({
       <SettingSection
         icon={<Network className="h-4 w-4" />}
         title="Instance Sync"
-        description="Choose whether this instance acts independently, pushes configuration to slave nodes, or pulls configuration from a master."
+        description="Choose whether this instance acts independently, pushes configuration to replica nodes, or pulls configuration from a primary."
         accent={A.sync}
       >
         <form action={instanceModeFormAction} className="flex flex-col gap-3">
@@ -240,8 +269,8 @@ export default function SettingsClient({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="standalone">Standalone</SelectItem>
-                <SelectItem value="master">Master</SelectItem>
-                <SelectItem value="slave">Slave</SelectItem>
+                <SelectItem value="primary">Primary</SelectItem>
+                <SelectItem value="replica">Replica</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -252,28 +281,28 @@ export default function SettingsClient({
           </div>
         </form>
 
-        {isSlave && (
+        {isReplica && (
           <div className="flex flex-col gap-3 mt-1">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Master Connection</h3>
-            <form action={slaveTokenFormAction} className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Primary Connection</h3>
+            <form action={replicaTokenFormAction} className="flex flex-col gap-3">
               {instanceSync.tokenFromEnv && (
                 <InfoAlert>
                   Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime.
                 </InfoAlert>
               )}
-              {slaveTokenState?.message && (
-                <StatusAlert message={slaveTokenState.message} success={slaveTokenState.success} />
+              {replicaTokenState?.message && (
+                <StatusAlert message={replicaTokenState.message} success={replicaTokenState.success} />
               )}
-              {instanceSync.slave?.hasToken && !instanceSync.tokenFromEnv && (
+              {instanceSync.replica?.hasToken && !instanceSync.tokenFromEnv && (
                 <InfoAlert>
-                  A master sync token is configured. Leave the token field blank to keep it, or select &ldquo;Remove existing token&rdquo; to delete it.
+                  A primary sync token is configured. Leave the token field blank to keep it, or select &ldquo;Remove existing token&rdquo; to delete it.
                 </InfoAlert>
               )}
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="masterToken">Master sync token</Label>
+                <Label htmlFor="primaryToken">Primary sync token</Label>
                 <Input
-                  id="masterToken"
-                  name="masterToken"
+                  id="primaryToken"
+                  name="primaryToken"
                   type="password"
                   autoComplete="new-password"
                   placeholder="Enter new token"
@@ -284,38 +313,38 @@ export default function SettingsClient({
                 <Checkbox
                   id="clearToken"
                   name="clearToken"
-                  disabled={!instanceSync.slave?.hasToken || instanceSync.tokenFromEnv}
+                  disabled={!instanceSync.replica?.hasToken || instanceSync.tokenFromEnv}
                 />
                 <Label htmlFor="clearToken">Remove existing token</Label>
               </div>
               <div className="flex justify-end">
                 <Button type="submit" disabled={instanceSync.tokenFromEnv}>
-                  Save master token
+                  Save primary token
                 </Button>
               </div>
             </form>
-            {instanceSync.slave?.lastSyncError ? (
+            {instanceSync.replica?.lastSyncError ? (
               <WarnAlert>
-                {instanceSync.slave?.lastSyncAt
-                  ? `Last sync: ${instanceSync.slave.lastSyncAt} (${instanceSync.slave.lastSyncError})`
+                {instanceSync.replica?.lastSyncAt
+                  ? `Last sync: ${instanceSync.replica.lastSyncAt} (${instanceSync.replica.lastSyncError})`
                   : "No sync payload has been received yet."}
               </WarnAlert>
             ) : (
               <InfoAlert>
-                {instanceSync.slave?.lastSyncAt
-                  ? `Last sync: ${instanceSync.slave.lastSyncAt}`
+                {instanceSync.replica?.lastSyncAt
+                  ? `Last sync: ${instanceSync.replica.lastSyncAt}`
                   : "No sync payload has been received yet."}
               </InfoAlert>
             )}
           </div>
         )}
 
-        {isMaster && (
+        {isPrimary && (
           <div className="flex flex-col gap-3 mt-1">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Slave Instances</h3>
-            <form action={slaveInstanceFormAction} className="flex flex-col gap-3">
-              {slaveInstanceState?.message && (
-                <StatusAlert message={slaveInstanceState.message} success={slaveInstanceState.success} />
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Replica Instances</h3>
+            <form action={replicaInstanceFormAction} className="flex flex-col gap-3">
+              {replicaInstanceState?.message && (
+                <StatusAlert message={replicaInstanceState.message} success={replicaInstanceState.success} />
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -324,11 +353,11 @@ export default function SettingsClient({
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="inst-base-url">Base URL</Label>
-                  <Input id="inst-base-url" name="baseUrl" placeholder="https://slave-1.example.com" className="h-8 text-sm" />
+                  <Input id="inst-base-url" name="baseUrl" placeholder="https://replica-1.example.com" className="h-8 text-sm" />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="inst-api-token">Slave API token</Label>
+                <Label htmlFor="inst-api-token">Replica API token</Label>
                 <Input id="inst-api-token" name="apiToken" type="password" autoComplete="new-password" className="h-8 text-sm" />
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -338,20 +367,20 @@ export default function SettingsClient({
                   )}
                   <Button type="submit" variant="outline" size="sm">Sync now</Button>
                 </form>
-                <Button type="submit">Add slave instance</Button>
+                <Button type="submit">Add replica instance</Button>
               </div>
             </form>
 
-            {instanceSync.master?.instances.length === 0 && instanceSync.master?.envInstances.length === 0 && (
-              <InfoAlert>No slave instances configured yet.</InfoAlert>
+            {instanceSync.primary?.instances.length === 0 && instanceSync.primary?.envInstances.length === 0 && (
+              <InfoAlert>No replica instances configured yet.</InfoAlert>
             )}
 
-            {instanceSync.master?.envInstances && instanceSync.master.envInstances.length > 0 && (
+            {instanceSync.primary?.envInstances && instanceSync.primary.envInstances.length > 0 && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">
-                  Environment-configured (INSTANCE_SLAVES)
+                  Environment-configured (INSTANCE_REPLICAS)
                 </p>
-                {instanceSync.master.envInstances.map((instance, index) => (
+                {instanceSync.primary.envInstances.map((instance, index) => (
                   <div
                     key={`env-${index}`}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-4 py-3"
@@ -366,10 +395,10 @@ export default function SettingsClient({
               </>
             )}
 
-            {instanceSync.master?.instances && instanceSync.master.instances.length > 0 && (
+            {instanceSync.primary?.instances && instanceSync.primary.instances.length > 0 && (
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">UI-configured instances</p>
             )}
-            {instanceSync.master?.instances.map((instance) => (
+            {instanceSync.primary?.instances.map((instance) => (
               <div
                 key={instance.id}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
@@ -385,14 +414,14 @@ export default function SettingsClient({
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <form action={toggleSlaveInstanceAction}>
+                  <form action={toggleReplicaInstanceAction}>
                     <input type="hidden" name="instanceId" value={instance.id} />
                     <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
                     <Button type="submit" variant="outline" size="sm" className={instance.enabled ? "text-amber-600 border-amber-500/50" : "text-emerald-600 border-emerald-500/50"}>
                       {instance.enabled ? "Disable" : "Enable"}
                     </Button>
                   </form>
-                  <form action={deleteSlaveInstanceAction}>
+                  <form action={deleteReplicaInstanceAction}>
                     <input type="hidden" name="instanceId" value={instance.id} />
                     <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/50">
                       Remove
@@ -415,7 +444,7 @@ export default function SettingsClient({
           {generalState?.message && (
             <StatusAlert message={generalState.message} success={generalState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="general-override"
@@ -423,7 +452,7 @@ export default function SettingsClient({
                 checked={generalOverride}
                 onCheckedChange={(v) => setGeneralOverride(!!v)}
               />
-              <Label htmlFor="general-override">Override master settings</Label>
+              <Label htmlFor="general-override">Override primary settings</Label>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -434,7 +463,7 @@ export default function SettingsClient({
                 name="primaryDomain"
                 defaultValue={general?.primaryDomain ?? "caddyproxymanager.com"}
                 required
-                disabled={isSlave && !generalOverride}
+                disabled={isReplica && !generalOverride}
                 className="h-8 text-sm font-mono"
               />
             </div>
@@ -445,7 +474,7 @@ export default function SettingsClient({
                 name="acmeEmail"
                 type="email"
                 defaultValue={general?.acmeEmail ?? ""}
-                disabled={isSlave && !generalOverride}
+                disabled={isReplica && !generalOverride}
                 className="h-8 text-sm"
               />
             </div>
@@ -472,7 +501,7 @@ export default function SettingsClient({
           {cloudflareState?.message && (
             <StatusAlert message={cloudflareState.message} success={cloudflareState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="cloudflare-override"
@@ -480,7 +509,7 @@ export default function SettingsClient({
                 checked={cloudflareOverride}
                 onCheckedChange={(v) => setCloudflareOverride(!!v)}
               />
-              <Label htmlFor="cloudflare-override">Override master settings</Label>
+              <Label htmlFor="cloudflare-override">Override primary settings</Label>
             </div>
           )}
           <div className="flex flex-col gap-1.5">
@@ -491,7 +520,7 @@ export default function SettingsClient({
               type="password"
               autoComplete="new-password"
               placeholder="Enter new token"
-              disabled={isSlave && !cloudflareOverride}
+              disabled={isReplica && !cloudflareOverride}
               className="h-8 text-sm"
             />
           </div>
@@ -499,18 +528,18 @@ export default function SettingsClient({
             <Checkbox
               id="cf-clearToken"
               name="clearToken"
-              disabled={!cloudflare.hasToken || (isSlave && !cloudflareOverride)}
+              disabled={!cloudflare.hasToken || (isReplica && !cloudflareOverride)}
             />
             <Label htmlFor="cf-clearToken">Remove existing token</Label>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cf-zoneId">Zone ID</Label>
-              <Input id="cf-zoneId" name="zoneId" defaultValue={cloudflare.zoneId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
+              <Input id="cf-zoneId" name="zoneId" defaultValue={cloudflare.zoneId ?? ""} disabled={isReplica && !cloudflareOverride} className="h-8 text-sm font-mono" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cf-accountId">Account ID</Label>
-              <Input id="cf-accountId" name="accountId" defaultValue={cloudflare.accountId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
+              <Input id="cf-accountId" name="accountId" defaultValue={cloudflare.accountId ?? ""} disabled={isReplica && !cloudflareOverride} className="h-8 text-sm font-mono" />
             </div>
           </div>
           <div className="flex justify-end">
@@ -530,7 +559,7 @@ export default function SettingsClient({
           {dnsState?.message && (
             <StatusAlert message={dnsState.message} success={dnsState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="dns-override"
@@ -538,7 +567,7 @@ export default function SettingsClient({
                 checked={dnsOverride}
                 onCheckedChange={(v) => setDnsOverride(!!v)}
               />
-              <Label htmlFor="dns-override">Override master settings</Label>
+              <Label htmlFor="dns-override">Override primary settings</Label>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -546,7 +575,7 @@ export default function SettingsClient({
               id="dns-enabled"
               name="enabled"
               defaultChecked={dns?.enabled ?? false}
-              disabled={isSlave && !dnsOverride}
+              disabled={isReplica && !dnsOverride}
             />
             <Label htmlFor="dns-enabled">Enable custom DNS resolvers</Label>
           </div>
@@ -559,7 +588,7 @@ export default function SettingsClient({
                 placeholder={"1.1.1.1\n8.8.8.8"}
                 defaultValue={dns?.resolvers?.join("\n") ?? ""}
                 rows={2}
-                disabled={isSlave && !dnsOverride}
+                disabled={isReplica && !dnsOverride}
                 className="flex min-h-[56px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
               />
             </div>
@@ -571,7 +600,7 @@ export default function SettingsClient({
                 placeholder={"8.8.4.4\n1.0.0.1"}
                 defaultValue={dns?.fallbacks?.join("\n") ?? ""}
                 rows={2}
-                disabled={isSlave && !dnsOverride}
+                disabled={isReplica && !dnsOverride}
                 className="flex min-h-[56px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
               />
             </div>
@@ -583,7 +612,7 @@ export default function SettingsClient({
               name="timeout"
               placeholder="5s"
               defaultValue={dns?.timeout ?? ""}
-              disabled={isSlave && !dnsOverride}
+              disabled={isReplica && !dnsOverride}
               className="h-8 text-sm w-32"
             />
             <p className="text-xs text-muted-foreground">e.g. 5s, 10s</p>
@@ -609,7 +638,7 @@ export default function SettingsClient({
           {upstreamDnsResolutionState?.message && (
             <StatusAlert message={upstreamDnsResolutionState.message} success={upstreamDnsResolutionState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="udns-override"
@@ -617,7 +646,7 @@ export default function SettingsClient({
                 checked={upstreamDnsResolutionOverride}
                 onCheckedChange={(v) => setUpstreamDnsResolutionOverride(!!v)}
               />
-              <Label htmlFor="udns-override">Override master settings</Label>
+              <Label htmlFor="udns-override">Override primary settings</Label>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -625,7 +654,7 @@ export default function SettingsClient({
               id="udns-enabled"
               name="enabled"
               defaultChecked={upstreamDnsResolution?.enabled ?? false}
-              disabled={isSlave && !upstreamDnsResolutionOverride}
+              disabled={isReplica && !upstreamDnsResolutionOverride}
             />
             <Label htmlFor="udns-enabled">Enable upstream DNS pinning during config apply</Label>
           </div>
@@ -634,7 +663,7 @@ export default function SettingsClient({
             <Select
               name="family"
               defaultValue={upstreamDnsResolution?.family ?? "both"}
-              disabled={isSlave && !upstreamDnsResolutionOverride}
+              disabled={isReplica && !upstreamDnsResolutionOverride}
             >
               <SelectTrigger id="udns-family" className="w-56">
                 <SelectValue />
@@ -669,7 +698,7 @@ export default function SettingsClient({
           {authentikState?.message && (
             <StatusAlert message={authentikState.message} success={authentikState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="authentik-override"
@@ -677,7 +706,7 @@ export default function SettingsClient({
                 checked={authentikOverride}
                 onCheckedChange={(v) => setAuthentikOverride(!!v)}
               />
-              <Label htmlFor="authentik-override">Override master settings</Label>
+              <Label htmlFor="authentik-override">Override primary settings</Label>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -689,7 +718,7 @@ export default function SettingsClient({
                 placeholder="outpost.goauthentik.io"
                 defaultValue={authentik?.outpostDomain ?? ""}
                 required
-                disabled={isSlave && !authentikOverride}
+                disabled={isReplica && !authentikOverride}
                 className="h-8 text-sm font-mono"
               />
             </div>
@@ -701,7 +730,7 @@ export default function SettingsClient({
                 placeholder="http://authentik-server:9000"
                 defaultValue={authentik?.outpostUpstream ?? ""}
                 required
-                disabled={isSlave && !authentikOverride}
+                disabled={isReplica && !authentikOverride}
                 className="h-8 text-sm font-mono"
               />
             </div>
@@ -713,7 +742,7 @@ export default function SettingsClient({
               name="authEndpoint"
               placeholder="/outpost.goauthentik.io/auth/caddy"
               defaultValue={authentik?.authEndpoint ?? ""}
-              disabled={isSlave && !authentikOverride}
+              disabled={isReplica && !authentikOverride}
               className="h-8 text-sm font-mono"
             />
           </div>
@@ -734,7 +763,7 @@ export default function SettingsClient({
           {metricsState?.message && (
             <StatusAlert message={metricsState.message} success={metricsState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="metrics-override"
@@ -742,7 +771,7 @@ export default function SettingsClient({
                 checked={metricsOverride}
                 onCheckedChange={(v) => setMetricsOverride(!!v)}
               />
-              <Label htmlFor="metrics-override">Override master settings</Label>
+              <Label htmlFor="metrics-override">Override primary settings</Label>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -750,7 +779,7 @@ export default function SettingsClient({
               id="metrics-enabled"
               name="enabled"
               defaultChecked={metrics?.enabled ?? false}
-              disabled={isSlave && !metricsOverride}
+              disabled={isReplica && !metricsOverride}
             />
             <Label htmlFor="metrics-enabled">Enable metrics endpoint</Label>
           </div>
@@ -761,7 +790,7 @@ export default function SettingsClient({
               name="port"
               type="number"
               defaultValue={metrics?.port ?? 9090}
-              disabled={isSlave && !metricsOverride}
+              disabled={isReplica && !metricsOverride}
               className="h-8 text-sm w-32 font-mono"
             />
             <p className="text-xs text-muted-foreground">Separate from admin API on port 2019.</p>
@@ -787,7 +816,7 @@ export default function SettingsClient({
           {loggingState?.message && (
             <StatusAlert message={loggingState.message} success={loggingState.success} />
           )}
-          {isSlave && (
+          {isReplica && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="logging-override"
@@ -795,7 +824,7 @@ export default function SettingsClient({
                 checked={loggingOverride}
                 onCheckedChange={(v) => setLoggingOverride(!!v)}
               />
-              <Label htmlFor="logging-override">Override master settings</Label>
+              <Label htmlFor="logging-override">Override primary settings</Label>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -803,7 +832,7 @@ export default function SettingsClient({
               id="logging-enabled"
               name="enabled"
               defaultChecked={logging?.enabled ?? false}
-              disabled={isSlave && !loggingOverride}
+              disabled={isReplica && !loggingOverride}
             />
             <Label htmlFor="logging-enabled">Enable access logging</Label>
           </div>
@@ -812,7 +841,7 @@ export default function SettingsClient({
             <Select
               name="format"
               defaultValue={logging?.format ?? "json"}
-              disabled={isSlave && !loggingOverride}
+              disabled={isReplica && !loggingOverride}
             >
               <SelectTrigger id="logging-format" className="w-56">
                 <SelectValue />

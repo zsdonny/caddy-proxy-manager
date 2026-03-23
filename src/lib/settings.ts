@@ -75,7 +75,7 @@ export type GeoBlockSettings = {
   redirect_url: string;           // if set, 302 redirect instead of status/body
 };
 
-type InstanceMode = "standalone" | "master" | "slave";
+type InstanceMode = "standalone" | "primary" | "replica";
 
 const INSTANCE_MODE_KEY = "instance_mode";
 const SYNCED_PREFIX = "synced:";
@@ -99,8 +99,14 @@ export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
 
 async function getInstanceModeForSettings(): Promise<InstanceMode> {
   const stored = await getSetting<string>(INSTANCE_MODE_KEY);
-  if (stored === "master" || stored === "slave" || stored === "standalone") {
+  if (stored === "primary" || stored === "standalone") {
     return stored;
+  }
+  if (stored === "replica" || stored === "slave") {
+    return "replica";
+  }
+  if (stored === "master") {
+    return "primary";
   }
   return "standalone";
 }
@@ -111,7 +117,7 @@ async function getSyncedSetting<T>(key: string): Promise<SettingValue<T>> {
 
 export async function getEffectiveSetting<T>(key: string): Promise<SettingValue<T>> {
   const mode = await getInstanceModeForSettings();
-  if (mode !== "slave") {
+  if (mode !== "replica") {
     return await getSetting<T>(key);
   }
 
