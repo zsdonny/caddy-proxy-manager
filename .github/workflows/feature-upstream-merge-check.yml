@@ -262,15 +262,23 @@ jobs:
               "temperature": 0.2
             }')
 
-          RESPONSE=$(curl -s \
+          HTTP_CODE=$(curl -s -o /tmp/ai-raw-response.json -w "%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             https://models.inference.ai.azure.com/chat/completions)
 
-          printf '%s\n' "$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "Copilot classification unavailable."')" \
-            > /tmp/ai-analysis.txt
+          echo "GitHub Models API HTTP status: $HTTP_CODE"
+
+          CONTENT=$(jq -r '.choices[0].message.content // empty' /tmp/ai-raw-response.json 2>/dev/null)
+          if [ -n "$CONTENT" ]; then
+            printf '%s\n' "$CONTENT" > /tmp/ai-analysis.txt
+          else
+            echo "::warning::GitHub Models API did not return a classification (HTTP $HTTP_CODE). Raw response:"
+            cat /tmp/ai-raw-response.json
+            echo "Copilot classification unavailable." > /tmp/ai-analysis.txt
+          fi
 
       - name: Write aggregate step summary
         if: always()
