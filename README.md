@@ -18,6 +18,7 @@
 | **Fork web image** | A pre-built `web` image including all fork patches is published as `ghcr.io/zsdonny/caddy-proxy-manager-web:latest` |
 | **Fork caddy image** | A pre-built `caddy` image is published as `ghcr.io/zsdonny/caddy-proxy-manager-caddy:latest` |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads |
+| **Proxy host duplication fix** | Duplicating a proxy host now correctly copies all geoblock settings (rules, mode, response config, trusted proxies) instead of silently resetting them |
 
 ## Composeless L4 Port Manager (Direct Mode)
 
