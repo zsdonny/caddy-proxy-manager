@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
+import { applyCaddyConfig } from "@/src/lib/caddy";
 import {
   createProxyHost,
   deleteProxyHost,
@@ -498,6 +500,7 @@ export async function createProxyHostAction(
       userId
     );
     revalidatePath("/proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[proxy-actions] Caddy apply failed:", e)));
 
     // Return success with warning if applicable
     if (warning) {
@@ -574,6 +577,7 @@ export async function updateProxyHostAction(
       userId
     );
     revalidatePath("/proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[proxy-actions] Caddy apply failed:", e)));
 
     // Return success with warning if applicable
     if (warning) {
@@ -596,6 +600,7 @@ export async function deleteProxyHostAction(
     const userId = Number(session.user.id);
     await deleteProxyHost(id, userId);
     revalidatePath("/proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[proxy-actions] Caddy apply failed:", e)));
     return actionSuccess("Proxy host deleted.");
   } catch (error) {
     console.error(`Failed to delete proxy host ${id}:`, error);
@@ -612,6 +617,7 @@ export async function toggleProxyHostAction(
     const userId = Number(session.user.id);
     await updateProxyHost(id, { enabled }, userId);
     revalidatePath("/proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[proxy-actions] Caddy apply failed:", e)));
     return actionSuccess(`Proxy host ${enabled ? "enabled" : "disabled"}.`);
   } catch (error) {
     console.error(`Failed to toggle proxy host ${id}:`, error);

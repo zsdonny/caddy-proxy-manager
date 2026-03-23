@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { MoreHorizontal, Network, ArrowRight, Lock, Cable, Globe, Scale, Waypoints, Pin, ListFilter } from "lucide-react";
 import type { L4ProxyHost } from "@/src/lib/models/l4-proxy-hosts";
 import { toggleL4ProxyHostAction } from "./actions";
@@ -119,6 +120,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [featureFilters, setFeatureFilters] = useState<Set<L4FeatureKey>>(new Set());
   const [bannerRefresh, setBannerRefresh] = useState(0);
+  const [optimisticEnabled, setOptimisticEnabled] = useState<Map<number, boolean>>(new Map());
 
   const toggleFeatureFilter = (key: L4FeatureKey) => {
     setFeatureFilters((prev) => {
@@ -200,8 +202,20 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
   }
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
-    await toggleL4ProxyHostAction(id, enabled);
-    signalBannerRefresh();
+    setOptimisticEnabled(prev => new Map([...prev, [id, enabled]]));
+    try {
+      const result = await toggleL4ProxyHostAction(id, enabled);
+      if (result.status === "error") {
+        toast.error(result.message ?? "Failed to toggle host");
+        setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+      }
+    } catch {
+      toast.error("Failed to toggle host");
+      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+    } finally {
+      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+      signalBannerRefresh();
+    }
   };
 
   const columns = [
@@ -281,7 +295,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
       render: (host: L4ProxyHost) => (
         <div className="flex items-center gap-2 justify-end">
           <Switch
-            checked={host.enabled}
+            checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
             onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
           <DropdownMenu>
@@ -325,11 +339,11 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
               <span className="mx-1 text-muted-foreground">→</span>
               {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
             </p>
-            <StatusChip status={host.enabled ? "active" : "inactive"} className="w-fit mt-1" />
+            <StatusChip status={(optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled) ? "active" : "inactive"} className="w-fit mt-1" />
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Switch
-              checked={host.enabled}
+              checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
               onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
             />
             <DropdownMenu>

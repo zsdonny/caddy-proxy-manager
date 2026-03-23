@@ -2,6 +2,7 @@
 
 import { useFormState } from "react-dom";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   createL4ProxyHostAction,
   deleteL4ProxyHostAction,
@@ -827,12 +828,17 @@ export function CreateL4HostDialog({
     createL4ProxyHostAction,
     INITIAL_ACTION_STATE
   );
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (state.status === "success") {
-      setTimeout(onClose, 1000);
+      if (state.message) toast.success(state.message);
+      setIsPending(false);
+      onClose();
+    } else if (state.status === "error") {
+      setIsPending(false);
     }
-  }, [state.status, onClose]);
+  }, [state.status, state.message, onClose]);
 
   return (
     <AppDialog
@@ -841,7 +847,9 @@ export function CreateL4HostDialog({
       title={initialData ? "Duplicate L4 Proxy Host" : "Create L4 Proxy Host"}
       maxWidth="lg"
       submitLabel="Create"
+      isSubmitting={isPending}
       onSubmit={() => {
+        setIsPending(true);
         (
           document.getElementById("create-l4-host-form") as HTMLFormElement
         )?.requestSubmit();
@@ -872,12 +880,17 @@ export function EditL4HostDialog({
     updateL4ProxyHostAction.bind(null, host.id),
     INITIAL_ACTION_STATE
   );
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (state.status === "success") {
-      setTimeout(onClose, 1000);
+      if (state.message) toast.success(state.message);
+      setIsPending(false);
+      onClose();
+    } else if (state.status === "error") {
+      setIsPending(false);
     }
-  }, [state.status, onClose]);
+  }, [state.status, state.message, onClose]);
 
   return (
     <AppDialog
@@ -886,7 +899,9 @@ export function EditL4HostDialog({
       title="Edit L4 Proxy Host"
       maxWidth="lg"
       submitLabel="Save Changes"
+      isSubmitting={isPending}
       onSubmit={() => {
+        setIsPending(true);
         (
           document.getElementById("edit-l4-host-form") as HTMLFormElement
         )?.requestSubmit();
@@ -915,12 +930,17 @@ export function DeleteL4HostDialog({
     deleteL4ProxyHostAction.bind(null, host.id),
     INITIAL_ACTION_STATE
   );
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (state.status === "success") {
-      setTimeout(onClose, 1000);
+      if (state.message) toast.success(state.message);
+      setIsPending(false);
+      onClose();
+    } else if (state.status === "error") {
+      setIsPending(false);
     }
-  }, [state.status, onClose]);
+  }, [state.status, state.message, onClose]);
 
   return (
     <AppDialog
@@ -929,7 +949,9 @@ export function DeleteL4HostDialog({
       title="Delete L4 Proxy Host"
       maxWidth="lg"
       submitLabel="Delete"
+      isSubmitting={isPending}
       onSubmit={() => {
+        setIsPending(true);
         (
           document.getElementById("delete-l4-host-form") as HTMLFormElement
         )?.requestSubmit();

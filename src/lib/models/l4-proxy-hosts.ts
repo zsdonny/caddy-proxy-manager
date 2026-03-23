@@ -1,5 +1,4 @@
 import db, { nowIso, toIso } from "../db";
-import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { l4ProxyHosts } from "../db/schema";
 import { asc, desc, eq, count, like, or } from "drizzle-orm";
@@ -542,7 +541,6 @@ export async function createL4ProxyHost(input: L4ProxyHostInput, actorUserId: nu
     data: input,
   });
 
-  await applyCaddyConfig();
   return (await getL4ProxyHost(record.id))!;
 }
 
@@ -668,7 +666,6 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
     data: input,
   });
 
-  await applyCaddyConfig();
   return (await getL4ProxyHost(id))!;
 }
 
@@ -686,5 +683,4 @@ export async function deleteL4ProxyHost(id: number, actorUserId: number) {
     entityId: id,
     summary: `Deleted L4 proxy host ${existing.name}`,
   });
-  await applyCaddyConfig();
 }

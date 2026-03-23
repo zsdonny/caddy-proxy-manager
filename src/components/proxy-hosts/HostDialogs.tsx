@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormState } from "react-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
     createProxyHostAction,
     deleteProxyHostAction,
@@ -46,12 +47,17 @@ export function CreateHostDialog({
     caCertificates?: CaCertificate[];
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
+    const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (state.status === "success") {
-            setTimeout(onClose, 1000);
+            if (state.message) toast.success(state.message);
+            setIsPending(false);
+            onClose();
+        } else if (state.status === "error") {
+            setIsPending(false);
         }
-    }, [state.status, onClose]);
+    }, [state.status, state.message, onClose]);
 
     return (
         <AppDialog
@@ -60,7 +66,9 @@ export function CreateHostDialog({
             title={initialData ? "Duplicate Proxy Host" : "Create Proxy Host"}
             maxWidth="lg"
             submitLabel="Create"
+            isSubmitting={isPending}
             onSubmit={() => {
+                setIsPending(true);
                 (document.getElementById("create-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >
@@ -189,12 +197,17 @@ export function EditHostDialog({
     caCertificates?: CaCertificate[];
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (state.status === "success") {
-            setTimeout(onClose, 1000);
+            if (state.message) toast.success(state.message);
+            setIsPending(false);
+            onClose();
+        } else if (state.status === "error") {
+            setIsPending(false);
         }
-    }, [state.status, onClose]);
+    }, [state.status, state.message, onClose]);
 
     return (
         <AppDialog
@@ -203,7 +216,9 @@ export function EditHostDialog({
             title="Edit Proxy Host"
             maxWidth="lg"
             submitLabel="Save Changes"
+            isSubmitting={isPending}
             onSubmit={() => {
+                setIsPending(true);
                 (document.getElementById("edit-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >
@@ -316,12 +331,17 @@ export function DeleteHostDialog({
     onClose: () => void;
 }) {
     const [state, formAction] = useFormState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (state.status === "success") {
-            setTimeout(onClose, 1000);
+            if (state.message) toast.success(state.message);
+            setIsPending(false);
+            onClose();
+        } else if (state.status === "error") {
+            setIsPending(false);
         }
-    }, [state.status, onClose]);
+    }, [state.status, state.message, onClose]);
 
     return (
         <AppDialog
@@ -330,7 +350,9 @@ export function DeleteHostDialog({
             title="Delete Proxy Host"
             maxWidth="sm"
             submitLabel="Delete"
+            isSubmitting={isPending}
             onSubmit={() => {
+                setIsPending(true);
                 (document.getElementById("delete-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >

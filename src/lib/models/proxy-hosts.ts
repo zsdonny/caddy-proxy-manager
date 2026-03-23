@@ -1,5 +1,4 @@
 import db, { nowIso, toIso } from "../db";
-import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
 import { asc, desc, eq, count, like, or } from "drizzle-orm";
@@ -1541,7 +1540,6 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
     data: input
   });
 
-  await applyCaddyConfig();
   return (await getProxyHost(record.id))!;
 }
 
@@ -1606,7 +1604,6 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     data: input
   });
 
-  await applyCaddyConfig();
   return (await getProxyHost(id))!;
 }
 
@@ -1624,5 +1621,4 @@ export async function deleteProxyHost(id: number, actorUserId: number) {
     entityId: id,
     summary: `Deleted proxy host ${existing.name}`
   });
-  await applyCaddyConfig();
 }
