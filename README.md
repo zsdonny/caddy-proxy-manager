@@ -16,7 +16,7 @@
 
 ## Changes from Upstream
 
-**Last upstream sync:** 2026-03-23 — merged upstream's shadcn/ui rewrite (MUI → shadcn/ui + Tailwind CSS), L4 UDP routing fixes, E2E test updates, and updated screenshots.
+**Last upstream sync:** 2026-03-24 — rebased onto upstream/develop; picked up Tailwind CSS v4 upgrade, feature badges (superseded by fork), and README trim.
 
 | Change | Description | Status |
 |--------|-------------|--------|
