@@ -1,0 +1,113 @@
+name: Monitor Upstream Caddy Image
+
+# Runs daily to detect upstream changes to docker/caddy/ and alert via Pushover.
+# Stores the last-seen upstream SHA in docker/caddy/.upstream-sha for change detection
+# (the commit does NOT trigger a build — .upstream-sha is excluded from
+# docker-build-caddy.yml's path filter).
+#
+# Alerts are sent when:
+# 1. Upstream commits to docker/caddy/ (review and rebuild manually if needed)
+# 2. Upstream ships their own caddy build workflow (fork build may become redundant)
+#
+# Required secrets: PUSHOVER_USER_KEY, PUSHOVER_APP_TOKEN
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: 'Send a test Pushover alert (skips upstream checks)'
+        type: boolean
+        default: false
+
+jobs:
+  check-and-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v6
+        with:
+          ref: develop
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get upstream latest caddy commit SHA
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api \
+            "repos/fuomag9/caddy-proxy-manager/commits?path=docker/caddy&per_page=1" \
+            --jq '.[0].sha' 2>/dev/null || echo "")
+          if [ -z "$SHA" ]; then
+            echo "::warning::Could not fetch upstream SHA — API may be unavailable"
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Read stored upstream SHA
+        id: stored
+        run: |
+          FILE="docker/caddy/.upstream-sha"
+          if [ -f "$FILE" ]; then
+            echo "sha=$(cat "$FILE")" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync upstream SHA (change detection only — does not trigger build)
+        id: synced
+        if: >
+          steps.upstream.outputs.sha != '' &&
+          steps.upstream.outputs.sha != steps.stored.outputs.sha
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${{ steps.upstream.outputs.sha }}" > docker/caddy/.upstream-sha
+          git add docker/caddy/.upstream-sha
+          git commit -m "chore: track upstream caddy @ ${{ steps.upstream.outputs.sha }}"
+          git push
+          # Only alert on real changes — skip on first bootstrap (no stored SHA yet)
+          if [ -n "${{ steps.stored.outputs.sha }}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::First run — bootstrapped upstream SHA. No alert sent."
+          fi
+
+      - name: Send Pushover alert when upstream caddy image changes
+        if: steps.synced.outputs.changed == 'true'
+        run: |
+          curl -s --fail-with-body \
+            --form-string "token=${{ secrets.PUSHOVER_APP_TOKEN }}" \
+            --form-string "user=${{ secrets.PUSHOVER_USER_KEY }}" \
+            --form-string "title=Upstream caddy image updated" \
+            --form-string "message=fuomag9/caddy-proxy-manager pushed changes to docker/caddy/. Your fork's caddy image may be outdated — review and rebuild if needed." \
+            --form-string "url=https://github.com/fuomag9/caddy-proxy-manager/commits/develop/docker/caddy" \
+            --form-string "url_title=View upstream changes" \
+            --form-string "priority=0" \
+            https://api.pushover.net/1/messages.json
+
+      - name: Check if upstream has added a caddy build workflow
+        id: upstream-workflow-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FOUND=$(gh api repos/fuomag9/caddy-proxy-manager/contents/.github/workflows \
+            --jq '[.[].name | select(test("caddy"; "i"))] | length > 0' 2>/dev/null || echo "false")
+          echo "found=$FOUND" >> "$GITHUB_OUTPUT"
+
+      - name: Send Pushover alert if upstream now builds caddy image
+        if: steps.upstream-workflow-check.outputs.found == 'true' || inputs.test_alert == true
+        run: |
+          curl -s --fail-with-body \
+            --form-string "token=${{ secrets.PUSHOVER_APP_TOKEN }}" \
+            --form-string "user=${{ secrets.PUSHOVER_USER_KEY }}" \
+            --form-string "title=Upstream caddy build workflow detected" \
+            --form-string "message=fuomag9/caddy-proxy-manager now has a caddy build workflow. Your fork's build may be redundant — check and consider retiring docker-build-caddy.yml." \
+            --form-string "url=https://github.com/fuomag9/caddy-proxy-manager/tree/main/.github/workflows" \
+            --form-string "url_title=View upstream workflows" \
+            --form-string "priority=1" \
+            https://api.pushover.net/1/messages.json
