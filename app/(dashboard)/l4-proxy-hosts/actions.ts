@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
+import { applyCaddyConfig } from "@/src/lib/caddy";
 import {
   createL4ProxyHost,
   deleteL4ProxyHost,
@@ -194,6 +196,7 @@ export async function createL4ProxyHostAction(
 
     await createL4ProxyHost(input, userId);
     revalidatePath("/l4-proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
     return actionSuccess("L4 proxy host created and queued for Caddy reload.");
   } catch (error) {
     console.error("Failed to create L4 proxy host:", error);
@@ -235,6 +238,7 @@ export async function updateL4ProxyHostAction(
 
     await updateL4ProxyHost(id, input, userId);
     revalidatePath("/l4-proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
     return actionSuccess("L4 proxy host updated.");
   } catch (error) {
     console.error(`Failed to update L4 proxy host ${id}:`, error);
@@ -252,6 +256,7 @@ export async function deleteL4ProxyHostAction(
     const userId = Number(session.user.id);
     await deleteL4ProxyHost(id, userId);
     revalidatePath("/l4-proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
     return actionSuccess("L4 proxy host deleted.");
   } catch (error) {
     console.error(`Failed to delete L4 proxy host ${id}:`, error);
@@ -268,6 +273,7 @@ export async function toggleL4ProxyHostAction(
     const userId = Number(session.user.id);
     await updateL4ProxyHost(id, { enabled }, userId);
     revalidatePath("/l4-proxy-hosts");
+    after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
     return actionSuccess(`L4 proxy host ${enabled ? "enabled" : "disabled"}.`);
   } catch (error) {
     console.error(`Failed to toggle L4 proxy host ${id}:`, error);

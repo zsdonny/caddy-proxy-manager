@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Globe, MoreHorizontal, ArrowRight, Lock, ShieldCheck, KeyRound, ShieldAlert, LockKeyhole, Scale, Waypoints, CornerDownRight, PenLine, FileJson, Workflow, ListFilter } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
@@ -151,6 +152,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [featureFilters, setFeatureFilters] = useState<Set<ProxyFeatureKey>>(new Set());
+  const [optimisticEnabled, setOptimisticEnabled] = useState<Map<number, boolean>>(new Map());
 
   const toggleFeatureFilter = (key: ProxyFeatureKey) => {
     setFeatureFilters((prev) => {
@@ -241,7 +243,19 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
   }
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
-    await toggleProxyHostAction(id, enabled);
+    setOptimisticEnabled(prev => new Map([...prev, [id, enabled]]));
+    try {
+      const result = await toggleProxyHostAction(id, enabled);
+      if (result.status === "error") {
+        toast.error(result.message ?? "Failed to toggle host");
+        setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+      }
+    } catch {
+      toast.error("Failed to toggle host");
+      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+    } finally {
+      setOptimisticEnabled(prev => { const next = new Map(prev); next.delete(id); return next; });
+    }
   };
 
   const columns = [
@@ -310,7 +324,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       render: (host: ProxyHost) => (
         <div className="flex items-center gap-2 justify-end">
           <Switch
-            checked={host.enabled}
+            checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
             onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
           <DropdownMenu>
@@ -358,7 +372,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Switch
-              checked={host.enabled}
+              checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
               onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
             />
             <DropdownMenu>

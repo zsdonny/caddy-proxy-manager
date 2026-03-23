@@ -72,6 +72,9 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
   }, [data, polling, fetchStatus]);
 
   const handleApply = async () => {
+    // Signal ConnectionMonitor that we expect the server to become unreachable
+    // during the Caddy container recreation in bridge-network mode.
+    window.dispatchEvent(new Event("caddy-reconnect-expected"));
     setApplying(true);
     try {
       const res = await fetch("/api/l4-ports", { method: "POST" });
