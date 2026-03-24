@@ -229,7 +229,7 @@ jobs:
           fi
 
       # ── 8. Copilot Analysis (GPT-4o-mini) ────────────────────────
-      - name: Copilot Analysis (gpt-4o-mini — free tier)
+      - name: Copilot Analysis (gpt-4o-mini)
         id: ai
         if: steps.diff.outputs.changed == 'true'
         env:

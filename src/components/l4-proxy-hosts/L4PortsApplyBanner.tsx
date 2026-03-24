@@ -33,6 +33,8 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
   const [polling, setPolling] = useState(false);
   // Track whether we've already signalled ConnectionMonitor for this apply cycle
   const reconnectSignalledRef = useRef(false);
+  // Client-side override: Caddy is reachable even if sidecar status lags behind
+  const [caddyRecovered, setCaddyRecovered] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -56,6 +58,20 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
     fetchStatus();
   }, [refreshSignal, fetchStatus]);
 
+  // Listen for ConnectionMonitor signalling that Caddy is back online.
+  // Docker healthcheck can lag behind actual availability, so the sidecar
+  // may still report "applying" even though the user is already connected
+  // through Caddy. In that case, show applied state client-side immediately.
+  useEffect(() => {
+    const handler = () => {
+      setCaddyRecovered(true);
+      // Do a final fetch — the sidecar may have caught up by now
+      fetchStatus();
+    };
+    window.addEventListener("caddy-reconnect-recovered", handler);
+    return () => window.removeEventListener("caddy-reconnect-recovered", handler);
+  }, [fetchStatus]);
+
   useEffect(() => {
     if (!data) return;
     const shouldPoll =
@@ -71,6 +87,7 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
     // Reset the flag once the apply cycle completes
     if (!shouldPoll) {
       reconnectSignalledRef.current = false;
+      setCaddyRecovered(false);
     }
 
     if (shouldPoll && !polling) {
@@ -110,21 +127,27 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
 
   const { diff, status } = data;
 
+  // When Caddy is back online but the sidecar status file still says "applying"
+  // (Docker healthcheck hasn't caught up), treat it as effectively applied so
+  // the user doesn't see a stale "Recreating caddy container" banner.
+  const effectiveState =
+    caddyRecovered && status.state === "applying" ? "applied" : status.state;
+
   // Show nothing if no changes needed and status is idle/applied
-  if (!diff.needsApply && (status.state === "idle" || status.state === "applied")) {
+  if (!diff.needsApply && (effectiveState === "idle" || effectiveState === "applied")) {
     return null;
   }
 
   const isSpinning =
-    status.state === "pending" || status.state === "applying";
+    effectiveState === "pending" || effectiveState === "applying";
 
   const alertVariant: "default" | "destructive" =
-    status.state === "failed" ? "destructive" : "default";
+    effectiveState === "failed" ? "destructive" : "default";
 
   const stateIcon =
-    status.state === "applied" ? (
+    effectiveState === "applied" ? (
       <CheckCircle className="h-4 w-4 text-green-500" />
-    ) : status.state === "failed" ? (
+    ) : effectiveState === "failed" ? (
       <XCircle className="h-4 w-4 text-destructive" />
     ) : isSpinning ? (
       <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -135,8 +158,8 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
       variant={alertVariant}
       className={cn(
         "flex items-start gap-3",
-        status.state === "applied" && "border-green-500/50 text-green-700 dark:text-green-400",
-        diff.needsApply && status.state !== "failed" && status.state !== "applied" && "border-yellow-500/50 text-yellow-800 dark:text-yellow-400"
+        effectiveState === "applied" && "border-green-500/50 text-green-700 dark:text-green-400",
+        diff.needsApply && effectiveState !== "failed" && effectiveState !== "applied" && "border-yellow-500/50 text-yellow-800 dark:text-yellow-400"
       )}
     >
       {stateIcon && <div className="mt-0.5 shrink-0">{stateIcon}</div>}
@@ -164,7 +187,7 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
           ) : (
             <p className="text-sm">{status.message}</p>
           )}
-          {status.state === "failed" && status.error && (
+          {effectiveState === "failed" && status.error && (
             <p className="text-xs text-destructive">{status.error}</p>
           )}
         </div>
@@ -176,8 +199,8 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
           onClick={handleApply}
           disabled={
             applying ||
-            status.state === "pending" ||
-            status.state === "applying"
+            effectiveState === "pending" ||
+            effectiveState === "applying"
           }
           className="shrink-0 ml-auto"
         >

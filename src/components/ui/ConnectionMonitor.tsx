@@ -10,12 +10,14 @@ import { toast } from "sonner";
  * Normal mode: pings /api/health every 10 s; after 2 consecutive failures
  * the reconnecting overlay is shown and retries move to every 3 s.
  *
- * Expected-disconnect mode: the overlay activates immediately on the first
- * failure after the "caddy-reconnect-expected" custom event is dispatched
- * (e.g. by L4PortsApplyBanner before a Caddy container restart).
+ * Expected-disconnect mode: the overlay activates **immediately** when the
+ * "caddy-reconnect-expected" custom event is dispatched (e.g. by
+ * L4PortsApplyBanner before a Caddy container restart), without waiting
+ * for any health-ping failure. This prevents users from clicking around
+ * or navigating to dead pages while Caddy is going down.
  *
- * Recovery: overlay dismissed, router.refresh() re-fetches stale data,
- * success toast shown.
+ * Recovery: overlay dismissed, "caddy-reconnect-recovered" event dispatched,
+ * router.refresh() re-fetches stale data, success toast shown.
  */
 export function ConnectionMonitor() {
   const router = useRouter();
@@ -32,11 +34,17 @@ export function ConnectionMonitor() {
     offlineRef.current = offline;
   }, [offline]);
 
-  // Listen for the expected-disconnect signal
+  // Listen for the expected-disconnect signal — show overlay immediately
   useEffect(() => {
     const handler = () => {
       expectedRef.current = true;
       setExpectedDisconnect(true);
+      // Show overlay immediately — don't wait for a failed health ping.
+      // The event is a reliable signal that Caddy is about to be recreated.
+      if (!offlineRef.current) {
+        offlineRef.current = true;
+        setOffline(true);
+      }
     };
     window.addEventListener("caddy-reconnect-expected", handler);
     return () => window.removeEventListener("caddy-reconnect-expected", handler);
@@ -51,6 +59,7 @@ export function ConnectionMonitor() {
 
         if (offlineRef.current) {
           // Recovered
+          const wasExpected = expectedRef.current;
           failCountRef.current = 0;
           expectedRef.current = false;
           offlineRef.current = false;
@@ -58,6 +67,12 @@ export function ConnectionMonitor() {
           setExpectedDisconnect(false);
           toast.success("Connection restored.");
           router.refresh();
+          // Notify listeners (e.g. L4PortsApplyBanner) that connectivity
+          // is back so they can dismiss stale "applying" states immediately
+          // rather than waiting for the Docker healthcheck to catch up.
+          if (wasExpected) {
+            window.dispatchEvent(new Event("caddy-reconnect-recovered"));
+          }
         } else {
           failCountRef.current = 0;
         }
@@ -72,6 +87,8 @@ export function ConnectionMonitor() {
     }
 
     const intervalMs = offline ? 3000 : 10000;
+    // Run an immediate ping when going offline so recovery is detected faster
+    if (offline) ping();
     const id = setInterval(ping, intervalMs);
     return () => clearInterval(id);
   }, [offline, router]);
