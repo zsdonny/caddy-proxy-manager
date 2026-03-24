@@ -11,8 +11,8 @@
 
 # Fork Notes
 
-[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/feature-upstream-merge-check.yml)
-[![Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/sync-caddy-blocker.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-ex/actions/workflows/sync-caddy-blocker.yml)
+[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml)
+[![Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml)
 
 ## Changes from Upstream
 
@@ -21,7 +21,7 @@
 | Change | Description | Status |
 |--------|-------------|--------|
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
-| **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
+| **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-plus-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-plus-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
 | **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI; WAF-blocked requests correctly reflected in analytics blocked counts and block-rate chart | Fork-exclusive |
@@ -44,7 +44,7 @@ docker compose up -d
 services:
   web:
     container_name: caddy-proxy-manager-web
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-plus-web:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -80,7 +80,7 @@ services:
 
   caddy:
     container_name: caddy-proxy-manager-caddy
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-plus-caddy:latest
     restart: unless-stopped
     ports:
       - "80:80"
@@ -108,7 +108,7 @@ services:
 
   l4-port-manager:
     container_name: caddy-proxy-manager-l4-ports
-    image: ghcr.io/zsdonny/caddy-proxy-manager-ex-l4-port-manager:latest
+    image: ghcr.io/zsdonny/caddy-proxy-manager-plus-l4-port-manager:latest
     restart: unless-stopped
     environment:
       DATA_DIR: /data
