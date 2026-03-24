@@ -5,12 +5,15 @@ FROM golang:1.26 AS builder
 # Install xcaddy
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
+# Copy the vendored caddy-blocker-plugin so xcaddy can use it as a local replace
+COPY docker/caddy/plugins/caddy-blocker-plugin /plugins/caddy-blocker-plugin
+
 # Build Caddy with plugins
-# GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched
-RUN GOPROXY=direct xcaddy build \
+# caddy-blocker-plugin uses the local vendored copy; other modules use the proxy cache
+RUN xcaddy build \
     --with github.com/caddy-dns/cloudflare \
     --with github.com/mholt/caddy-l4 \
-    --with github.com/fuomag9/caddy-blocker-plugin \
+    --with github.com/fuomag9/caddy-blocker-plugin=/plugins/caddy-blocker-plugin \
     --with github.com/corazawaf/coraza-caddy/v2 \
     --output /usr/bin/caddy
 
