@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
 import { trafficEvents, logParseState } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getRetentionSettings } from './settings';
 
 const LOG_FILE = '/logs/access.log';
@@ -262,13 +262,14 @@ export function stopLogParser(): void {
  * per-cycle WAF cross-reference was added.
  */
 export function backfillWafBlocked(): void {
-  const result = db.run(
+  db.run(
     `UPDATE traffic_events SET is_blocked = 1 WHERE is_blocked = 0 AND EXISTS (` +
     `SELECT 1 FROM waf_events WHERE waf_events.blocked = 1 ` +
     `AND waf_events.ts = traffic_events.ts AND waf_events.client_ip = traffic_events.client_ip ` +
     `AND waf_events.method = traffic_events.method AND waf_events.uri = traffic_events.uri)`
   );
-  if (result.changes > 0) {
-    console.log(`[log-parser] back-filled ${result.changes} traffic_events rows with WAF blocked status`);
+  const changed = db.get<{ n: number }>(sql`SELECT changes() AS n`)?.n ?? 0;
+  if (changed > 0) {
+    console.log(`[log-parser] back-filled ${changed} traffic_events rows with WAF blocked status`);
   }
 }
