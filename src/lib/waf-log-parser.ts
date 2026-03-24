@@ -292,6 +292,20 @@ export async function parseNewWafLogEntries(): Promise<void> {
           `[waf-log-parser] ${lines.length} lines → ${rows.length} events ` +
           `parse=${Math.round(tParse - t0)}ms insert=${Math.round(tInsert - tParse)}ms rss=${rss}MB`
         );
+        // Back-fill isBlocked on matching traffic_events rows so analytics blocked counts
+        // reflect WAF blocks in addition to access-list/caddy-blocker blocks.
+        const blockedRows = rows.filter(r => r.blocked);
+        if (blockedRows.length > 0) {
+          const tsList = blockedRows.map(r => r.ts as number);
+          const minTs = Math.min(...tsList);
+          const maxTs = Math.max(...tsList);
+          db.run(
+            `UPDATE traffic_events SET is_blocked = 1 WHERE is_blocked = 0 AND ts BETWEEN ${minTs} AND ${maxTs} ` +
+            `AND EXISTS (SELECT 1 FROM waf_events WHERE waf_events.blocked = 1 ` +
+            `AND waf_events.ts = traffic_events.ts AND waf_events.client_ip = traffic_events.client_ip ` +
+            `AND waf_events.method = traffic_events.method AND waf_events.uri = traffic_events.uri)`
+          );
+        }
       }
     }
 

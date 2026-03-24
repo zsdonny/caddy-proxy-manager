@@ -222,6 +222,19 @@ export async function parseNewLogEntries(): Promise<void> {
       const tParse = performance.now();
       insertBatch(rows);
       const tInsert = performance.now();
+      // Back-fill isBlocked from any already-inserted WAF events for this time range
+      // so analytics blocked counts reflect WAF blocks regardless of parse order.
+      if (rows.length > 0) {
+        const tsList = rows.map(r => r.ts as number);
+        const minTs = Math.min(...tsList);
+        const maxTs = Math.max(...tsList);
+        db.run(
+          `UPDATE traffic_events SET is_blocked = 1 WHERE is_blocked = 0 AND ts BETWEEN ${minTs} AND ${maxTs} ` +
+          `AND EXISTS (SELECT 1 FROM waf_events WHERE waf_events.blocked = 1 ` +
+          `AND waf_events.ts = traffic_events.ts AND waf_events.client_ip = traffic_events.client_ip ` +
+          `AND waf_events.method = traffic_events.method AND waf_events.uri = traffic_events.uri)`
+        );
+      }
       const rss = Math.round(process.memoryUsage.rss() / 1024 / 1024);
       console.log(
         `[log-parser] ${lines.length} lines → ${rows.length} rows (${blocked.size} blocked) ` +
