@@ -24,7 +24,7 @@
 | **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-ex-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-ex-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
-| **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI | Fork-exclusive |
+| **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI; WAF-blocked requests correctly reflected in analytics blocked counts and block-rate chart | Fork-exclusive |
 
 ## Quick Start
 
