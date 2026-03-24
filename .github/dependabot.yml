@@ -8,7 +8,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     reviewers:
-      - "fuomag9"
+      - "zsdonny"
     labels:
       - "dependencies"
       - "github-actions"
@@ -25,7 +25,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     reviewers:
-      - "fuomag9"
+      - "zsdonny"
     labels:
       - "dependencies"
       - "npm"
@@ -55,7 +55,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     reviewers:
-      - "fuomag9"
+      - "zsdonny"
     labels:
       - "dependencies"
       - "docker"
@@ -70,7 +70,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     reviewers:
-      - "fuomag9"
+      - "zsdonny"
     labels:
       - "dependencies"
       - "docker"

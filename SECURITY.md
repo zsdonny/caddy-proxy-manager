@@ -29,24 +29,21 @@ We will respond within 48 hours and provide regular updates on the fix progress.
 
 Our CI/CD pipeline implements multiple security layers:
 
-1. **Fork PR Protection**: Pull requests from forks require manual approval (via `safe-to-build` label) before builds run
-2. **SBOM Generation**: Software Bill of Materials is generated for all builds
-3. **Provenance Attestation**: Build provenance is recorded for supply chain security
-4. **Limited Permissions**: Workflows use minimal required permissions
-5. **No Push from PRs**: Pull requests only build images locally, never push to registry
+1. **SBOM Generation**: Software Bill of Materials is generated for all builds
+2. **Provenance Attestation**: Build provenance is recorded for supply chain security
+3. **Limited Permissions**: Workflows use minimal required permissions
 
 ### Container Security
 
-- Verified amd64 image builds
+- Verified amd64 and arm64 image builds
 - Regular base image updates
 - Minimal attack surface
 - Non-root user execution where possible
 
 ### Dependency Management
 
-- Automated dependency updates via Dependabot
-- Security alerts enabled
 - Regular security audits
+- Manual dependency updates as needed
 
 ## Security Best Practices for Contributors
 
@@ -63,18 +60,8 @@ When contributing:
 
 Our repository includes:
 
-- **Dependabot** for dependency updates
+- **GitHub Secret Scanning** for credential leak detection
 - **GitHub Security Advisories** monitoring
-
-## Safe-to-Build Label
-
-For maintainers reviewing fork PRs:
-
-1. Review the PR code thoroughly for malicious content
-2. Check for suspicious file modifications
-3. Verify no secrets or credentials are exposed
-4. Only add `safe-to-build` label if code is verified safe
-5. Remove label immediately if concerns arise
 
 ## Security Updates
 
