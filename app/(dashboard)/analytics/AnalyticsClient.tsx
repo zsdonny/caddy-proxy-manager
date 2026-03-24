@@ -174,6 +174,7 @@ function DateTimePicker({
             type="time"
             value={timeStr}
             onChange={handleTimeChange}
+            aria-label="Time"
             className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
@@ -276,7 +277,7 @@ function HostsCombobox({
               ? selectedHosts.map(h => (
                   <Badge key={h} variant="secondary" className="text-xs gap-1">
                     <span className="max-w-[80px] truncate">{h}</span>
-                    <button onMouseDown={e => { e.preventDefault(); toggle(h); }}>
+                    <button aria-label={`Remove ${h}`} onMouseDown={e => { e.preventDefault(); toggle(h); }}>
                       <X className="h-2.5 w-2.5" />
                     </button>
                   </Badge>
@@ -284,7 +285,7 @@ function HostsCombobox({
               : (
                   <Badge variant="secondary" className="text-xs gap-1">
                     {selectedHosts.length} hosts
-                    <button onMouseDown={e => { e.preventDefault(); onChange([]); }}>
+                    <button aria-label="Clear selection" onMouseDown={e => { e.preventDefault(); onChange([]); }}>
                       <X className="h-2.5 w-2.5" />
                     </button>
                   </Badge>
