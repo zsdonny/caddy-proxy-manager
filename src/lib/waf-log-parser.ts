@@ -4,12 +4,17 @@ import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
 import { wafEvents, wafLogParseState } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { getRetentionSettings } from './settings';
 
 const AUDIT_LOG = '/logs/waf-audit.log';
 const RULES_LOG = '/logs/waf-rules.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
 const BATCH_SIZE = 200;
-const RETENTION_DAYS = 90;
+const DEFAULT_RETENTION_DAYS = 90;
+const MAX_LINES_PER_CYCLE = 10_000;
+const PURGE_INTERVAL_MS = 3_600_000; // 1 hour
+
+let lastPurgeTime = 0;
 
 let geoReader: Awaited<ReturnType<typeof maxmind.open<CountryResponse>>> | null = null;
 const geoCache = new Map<string, string | null>();
@@ -188,6 +193,7 @@ async function readAuditLog(startOffset: number): Promise<{ lines: string[]; new
   return new Promise((resolve, reject) => {
     const lines: string[] = [];
     let bytesRead = 0;
+    let capped = false;
 
     const stream = createReadStream(AUDIT_LOG, { start: startOffset, encoding: 'utf8' });
     stream.on('error', (err: NodeJS.ErrnoException) => {
@@ -197,8 +203,14 @@ async function readAuditLog(startOffset: number): Promise<{ lines: string[]; new
 
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
     rl.on('line', (line) => {
+      if (capped) return;
       bytesRead += Buffer.byteLength(line, 'utf8') + 1;
       if (line.trim()) lines.push(line.trim());
+      if (lines.length >= MAX_LINES_PER_CYCLE) {
+        capped = true;
+        rl.close();
+        stream.destroy();
+      }
     });
     rl.on('close', () => resolve({ lines, newOffset: startOffset + bytesRead }));
     rl.on('error', reject);
@@ -206,13 +218,25 @@ async function readAuditLog(startOffset: number): Promise<{ lines: string[]; new
 }
 
 function insertBatch(rows: typeof wafEvents.$inferInsert[]): void {
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    db.insert(wafEvents).values(rows.slice(i, i + BATCH_SIZE)).run();
+  db.run('BEGIN');
+  try {
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      db.insert(wafEvents).values(rows.slice(i, i + BATCH_SIZE)).run();
+    }
+    db.run('COMMIT');
+  } catch (err) {
+    db.run('ROLLBACK');
+    throw err;
   }
 }
 
-function purgeOldEntries(): void {
-  const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
+async function purgeOldEntries(): Promise<void> {
+  const now = Date.now();
+  if (now - lastPurgeTime < PURGE_INTERVAL_MS) return;
+  lastPurgeTime = now;
+  const retention = await getRetentionSettings();
+  const days = retention?.wafRetentionDays ?? DEFAULT_RETENTION_DAYS;
+  const cutoff = Math.floor(now / 1000) - days * 86400;
   db.run(`DELETE FROM waf_events WHERE ts < ${cutoff}`);
 }
 
@@ -257,17 +281,38 @@ export async function parseNewWafLogEntries(): Promise<void> {
     const { lines, newOffset } = await readAuditLog(startOffset);
 
     if (lines.length > 0) {
+      const t0 = performance.now();
       const rows = lines.map(l => parseLine(l, ruleMap)).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
+      const tParse = performance.now();
       if (rows.length > 0) {
         insertBatch(rows);
-        console.log(`[waf-log-parser] inserted ${rows.length} WAF events`);
+        const tInsert = performance.now();
+        const rss = Math.round(process.memoryUsage.rss() / 1024 / 1024);
+        console.log(
+          `[waf-log-parser] ${lines.length} lines → ${rows.length} events ` +
+          `parse=${Math.round(tParse - t0)}ms insert=${Math.round(tInsert - tParse)}ms rss=${rss}MB`
+        );
+        // Back-fill isBlocked on matching traffic_events rows so analytics blocked counts
+        // reflect WAF blocks in addition to access-list/caddy-blocker blocks.
+        const blockedRows = rows.filter(r => r.blocked);
+        if (blockedRows.length > 0) {
+          const tsList = blockedRows.map(r => r.ts as number);
+          const minTs = Math.min(...tsList);
+          const maxTs = Math.max(...tsList);
+          db.run(
+            `UPDATE traffic_events SET is_blocked = 1 WHERE is_blocked = 0 AND ts BETWEEN ${minTs} AND ${maxTs} ` +
+            `AND EXISTS (SELECT 1 FROM waf_events WHERE waf_events.blocked = 1 ` +
+            `AND waf_events.ts = traffic_events.ts AND waf_events.client_ip = traffic_events.client_ip ` +
+            `AND waf_events.method = traffic_events.method AND waf_events.uri = traffic_events.uri)`
+          );
+        }
       }
     }
 
     setState('waf_audit_log_offset', String(newOffset));
     setState('waf_audit_log_size', String(currentSize));
 
-    purgeOldEntries();
+    await purgeOldEntries();
   } catch (err) {
     console.error('[waf-log-parser] error during parse:', err);
   }
