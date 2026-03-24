@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Checkout repository (full history + all origin refs)
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           fetch-depth: 0
 
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload result artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         with:
           name: result-${{ steps.merge.outputs.safe_branch }}
           path: /tmp/result/result.json
@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Download all result artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           pattern: result-*
           path: results

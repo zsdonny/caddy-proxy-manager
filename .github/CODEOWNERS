@@ -1,0 +1,3 @@
+# Require maintainer review for image-building and CI files
+docker/                         @zsdonny
+.github/workflows/              @zsdonny
