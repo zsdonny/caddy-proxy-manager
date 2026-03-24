@@ -49,9 +49,16 @@ export async function register() {
     }
 
     // Start log parser for analytics
-    const { initLogParser, parseNewLogEntries, stopLogParser } = await import("./lib/log-parser");
+    const { initLogParser, parseNewLogEntries, stopLogParser, backfillWafBlocked } = await import("./lib/log-parser");
     try {
       await initLogParser();
+      // Back-fill any historical traffic_events that were inserted before the
+      // per-cycle WAF cross-reference was added (one-time, idempotent).
+      try {
+        backfillWafBlocked();
+      } catch (backfillErr) {
+        console.error("WAF back-fill failed (non-fatal):", backfillErr);
+      }
       const logParserInterval = setInterval(async () => {
         try {
           await parseNewLogEntries();
