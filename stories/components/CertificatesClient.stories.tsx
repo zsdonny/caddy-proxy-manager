@@ -99,6 +99,8 @@ const mockCaCerts: CaCertificateView[] = [
   {
     id: 1,
     name: 'Internal Services CA',
+    certificate_pem: '-----BEGIN CERTIFICATE-----\nMIIBfakeCA...\n-----END CERTIFICATE-----',
+    has_private_key: true,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     issuedCerts: [
