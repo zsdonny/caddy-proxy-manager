@@ -23,7 +23,7 @@ import {
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -124,6 +124,21 @@ type L4Meta = {
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
+  upstream_tls?: {
+    enabled?: boolean;
+    insecure_skip_verify?: boolean;
+    server_name?: string;
+    root_ca_pem_files?: string[];
+    client_certificate_file?: string;
+    client_certificate_key_file?: string;
+    renegotiation?: string;
+  };
+  mtls?: {
+    enabled?: boolean;
+    ca_certificate_ids?: number[];
+  };
+  idle_timeout?: string;
+  certificate_id?: number | null;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -1306,7 +1321,11 @@ async function buildTlsAutomation(
   };
 }
 
-async function buildL4Servers(): Promise<Record<string, unknown> | null> {
+async function buildL4Servers(
+  caCertMap: Map<number, { id: number; certificatePem: string }>,
+  issuedClientCertMap: Map<number, string[]>,
+  cAsWithAnyIssuedCerts: Set<number>
+): Promise<Record<string, unknown> | null> {
   const l4Hosts = await db
     .select()
     .from(l4ProxyHosts)
@@ -1354,6 +1373,8 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
         route.match = [{ http: [{ host: matcherValues }] }];
       } else if (matcherType === "proxy_protocol") {
         route.match = [{ proxy_protocol: {} }];
+      } else if (matcherType === "remote_ip" && matcherValues.length > 0) {
+        route.match = [{ ip: { ranges: matcherValues } }];
       }
       // "none" = no match block (catch-all)
 
@@ -1412,7 +1433,31 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
 
       // 2. TLS termination
       if (host.tlsTermination) {
-        handlers.push({ handler: "tls" });
+        const tlsHandler: Record<string, unknown> = { handler: "tls" };
+
+        // mTLS: add client_authentication if configured
+        if (meta.mtls?.enabled && meta.mtls.ca_certificate_ids?.length) {
+          // Build a mTLS domain map for this host's matcher values
+          const matcherValues = host.matcherValue ? parseJson<string[]>(host.matcherValue, []) : [];
+          const l4MtlsDomainMap = new Map<string, number[]>();
+          for (const domain of matcherValues) {
+            l4MtlsDomainMap.set(domain.toLowerCase(), meta.mtls.ca_certificate_ids);
+          }
+          // Use domains or a placeholder for non-SNI hosts
+          const authDomains = matcherValues.length > 0 ? matcherValues : ["*"];
+          const clientAuth = buildClientAuthentication(
+            authDomains,
+            l4MtlsDomainMap.size > 0 ? l4MtlsDomainMap : new Map([["*", meta.mtls.ca_certificate_ids]]),
+            caCertMap,
+            issuedClientCertMap,
+            cAsWithAnyIssuedCerts
+          );
+          if (clientAuth) {
+            tlsHandler.connection_policies = [{ client_authentication: clientAuth }];
+          }
+        }
+
+        handlers.push(tlsHandler);
       }
 
       // 3. Proxy handler
@@ -1453,6 +1498,24 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
       };
       if (host.proxyProtocolVersion) {
         proxyHandler.proxy_protocol = host.proxyProtocolVersion;
+      }
+
+      // Upstream TLS dial config
+      if (meta.upstream_tls?.enabled) {
+        const tlsDial: Record<string, unknown> = {};
+        if (meta.upstream_tls.insecure_skip_verify) tlsDial.insecure_skip_verify = true;
+        if (meta.upstream_tls.server_name) tlsDial.server_name = meta.upstream_tls.server_name;
+        if (meta.upstream_tls.root_ca_pem_files?.length) tlsDial.root_ca_pem_files = meta.upstream_tls.root_ca_pem_files;
+        if (meta.upstream_tls.client_certificate_file) {
+          tlsDial.client_certificate = {
+            certificate_file: meta.upstream_tls.client_certificate_file,
+            key_file: meta.upstream_tls.client_certificate_key_file ?? "",
+          };
+        }
+        if (meta.upstream_tls.renegotiation && meta.upstream_tls.renegotiation !== "never") {
+          tlsDial.renegotiation = meta.upstream_tls.renegotiation;
+        }
+        proxyHandler.tls = tlsDial;
       }
       if (lbConfig) {
         const loadBalancing = buildLoadBalancingConfig(lbConfig);
@@ -1506,6 +1569,14 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
     servers[`l4_server_${serverIdx++}`] = {
       listen: [listenAddr],
       routes,
+      // idle_timeout: first host's value wins for multi-route servers
+      ...((() => {
+        for (const host of hosts) {
+          const m = parseJson<L4Meta>(host.meta, {});
+          if (m.idle_timeout) return { max_connection_duration: m.idle_timeout };
+        }
+        return {};
+      })()),
     };
   }
 
@@ -1636,6 +1707,45 @@ async function buildCaddyDocument() {
   }
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
+
+  // Feed L4 TLS-terminating SNI hosts into certificate provisioning
+  {
+    const l4TlsSniHosts = await db
+      .select({ matcherValue: l4ProxyHosts.matcherValue, meta: l4ProxyHosts.meta })
+      .from(l4ProxyHosts)
+      .where(and(
+        eq(l4ProxyHosts.enabled, true),
+        eq(l4ProxyHosts.tlsTermination, true),
+        eq(l4ProxyHosts.matcherType, "tls_sni")
+      ));
+
+    for (const l4Host of l4TlsSniHosts) {
+      const l4Meta = parseJson<L4Meta>(l4Host.meta, {});
+      const l4MatcherValues = parseJson<string[]>(l4Host.matcherValue, []);
+      if (l4MatcherValues.length === 0) continue;
+
+      const l4CertId = typeof l4Meta.certificate_id === "number" ? l4Meta.certificate_id : null;
+
+      if (!l4CertId) {
+        for (const domain of l4MatcherValues) {
+          const d = domain.trim().toLowerCase();
+          if (d) autoManagedDomains.add(d);
+        }
+      } else {
+        const cert = certificateMap.get(l4CertId);
+        if (cert) {
+          if (!certificateUsage.has(cert.id)) {
+            certificateUsage.set(cert.id, { certificate: cert, domains: new Set() });
+          }
+          const entry = certificateUsage.get(cert.id)!;
+          for (const domain of l4MatcherValues) {
+            const d = domain.trim().toLowerCase();
+            if (d) entry.domains.add(d);
+          }
+        }
+      }
+    }
+  }
   const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
     getGeneralSettings(),
     getDnsSettings(),
@@ -1755,7 +1865,7 @@ async function buildCaddyDocument() {
   const loggingApp = { logging: { logs: loggingLogs } };
 
   // Build L4 (TCP/UDP) proxy servers
-  const l4Servers = await buildL4Servers();
+  const l4Servers = await buildL4Servers(caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts);
   const l4App = l4Servers ? { layer4: { servers: l4Servers } } : {};
 
   // In macvlan mode, bind admin to the bridge IP only so the admin API

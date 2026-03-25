@@ -12,9 +12,11 @@ import type { MtlsConfig } from "@/lib/models/proxy-hosts";
 type Props = {
   value?: MtlsConfig | null;
   caCertificates: CaCertificate[];
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function MtlsFields({ value, caCertificates }: Props) {
+export function MtlsFields({ value, caCertificates, disabled, disabledReason }: Props) {
   const [enabled, setEnabled] = useState(value?.enabled ?? false);
   const [selectedIds, setSelectedIds] = useState<number[]>(value?.ca_certificate_ids ?? []);
 
@@ -25,10 +27,13 @@ export function MtlsFields({ value, caCertificates }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-amber-500/60 bg-amber-500/5 p-4">
+    <div className={cn(
+      "rounded-lg border border-amber-500/60 bg-amber-500/5 p-4",
+      disabled && "opacity-50"
+    )}>
       <input type="hidden" name="mtls_present" value="1" />
-      <input type="hidden" name="mtls_enabled" value={enabled ? "true" : "false"} />
-      {enabled && selectedIds.map(id => (
+      <input type="hidden" name="mtls_enabled" value={!disabled && enabled ? "true" : "false"} />
+      {!disabled && enabled && selectedIds.map(id => (
         <input key={id} type="hidden" name="mtls_ca_cert_id" value={String(id)} />
       ))}
 
@@ -46,16 +51,22 @@ export function MtlsFields({ value, caCertificates }: Props) {
           </div>
         </div>
         <Switch
-          checked={enabled}
+          checked={!disabled && enabled}
           onCheckedChange={setEnabled}
+          disabled={disabled}
           className="shrink-0"
         />
       </div>
 
-      <div className={cn(
-        "overflow-hidden transition-all duration-200",
-        enabled ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
-      )}>
+      {disabled && disabledReason && (
+        <p className="text-xs text-muted-foreground mt-2">{disabledReason}</p>
+      )}
+
+      {!disabled && (
+        <div className={cn(
+          "overflow-hidden transition-all duration-200",
+          enabled ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+        )}>
         <Alert className="mb-4">
           <AlertDescription>
             mTLS requires TLS to be configured on this host (certificate must be set).
@@ -87,6 +98,7 @@ export function MtlsFields({ value, caCertificates }: Props) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

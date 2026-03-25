@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock } from "lucide-react";
+import { Lock, Network } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
@@ -26,9 +26,15 @@ const columns = [
             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
             : "border-zinc-500/20 bg-zinc-500/10 text-zinc-400",
         ].join(" ")}>
-          <Lock className="h-3.5 w-3.5" />
+          {r.source === "l4" ? <Network className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
         </div>
         <div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold leading-tight">{r.name}</p>
+            {r.source === "l4" && (
+              <span className="inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-[10px] font-bold text-sky-500 leading-4">L4</span>
+            )}
+          </div>
           <p className="text-sm font-semibold leading-tight">{r.name}</p>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">
             {r.domains[0]}
@@ -66,7 +72,12 @@ function acmeMobileCard(r: AcmeHost) {
   return (
     <Card className={["border-l-2", r.enabled ? "border-l-emerald-500" : "border-l-zinc-500/30"].join(" ")}>
       <CardContent className="p-4 flex flex-col gap-1.5">
-        <p className="text-sm font-semibold">{r.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-semibold">{r.name}</p>
+          {r.source === "l4" && (
+            <span className="inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-[10px] font-bold text-sky-500 leading-4">L4</span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground font-mono">
           {r.domains[0]}{r.domains.length > 1 ? ` +${r.domains.length - 1}` : ""}
         </p>

@@ -4,7 +4,7 @@ import { l4ProxyHosts } from "../db/schema";
 import { asc, desc, eq, count, like, or } from "drizzle-orm";
 
 export type L4Protocol = "tcp" | "udp";
-export type L4MatcherType = "none" | "tls_sni" | "http_host" | "proxy_protocol";
+export type L4MatcherType = "none" | "tls_sni" | "http_host" | "proxy_protocol" | "remote_ip";
 export type L4ProxyProtocolVersion = "v1" | "v2";
 
 export type L4LoadBalancingPolicy = "random" | "round_robin" | "least_conn" | "ip_hash" | "first";
@@ -97,16 +97,48 @@ export type L4GeoBlockConfig = {
 
 export type L4GeoBlockMode = "merge" | "override";
 
+export type L4UpstreamTlsRenegotiation = "never" | "once" | "freely";
+
+export type L4UpstreamTlsConfig = {
+  enabled: boolean;
+  insecure_skip_verify: boolean;
+  server_name: string | null;
+  root_ca_pem_files: string[];
+  client_certificate_file: string | null;
+  client_certificate_key_file: string | null;
+  renegotiation: L4UpstreamTlsRenegotiation;
+};
+
+type L4UpstreamTlsMeta = {
+  enabled?: boolean;
+  insecure_skip_verify?: boolean;
+  server_name?: string;
+  root_ca_pem_files?: string[];
+  client_certificate_file?: string;
+  client_certificate_key_file?: string;
+  renegotiation?: string;
+};
+
+export type L4MtlsConfig = {
+  enabled: boolean;
+  ca_certificate_ids: number[];
+};
+
 export type L4ProxyHostMeta = {
   load_balancer?: L4LoadBalancerMeta;
   dns_resolver?: L4DnsResolverMeta;
   upstream_dns_resolution?: L4UpstreamDnsResolutionMeta;
   geoblock?: L4GeoBlockConfig;
   geoblock_mode?: L4GeoBlockMode;
+  upstream_tls?: L4UpstreamTlsMeta;
+  mtls?: L4MtlsConfig;
+  idle_timeout?: string;
+  certificate_id?: number | null;
 };
 
 const VALID_L4_LB_POLICIES: L4LoadBalancingPolicy[] = ["random", "round_robin", "least_conn", "ip_hash", "first"];
 const VALID_L4_UPSTREAM_DNS_FAMILIES: L4UpstreamDnsResolutionConfig["family"][] = ["ipv6", "ipv4", "both"];
+const VALID_L4_UPSTREAM_TLS_RENEGOTIATION: L4UpstreamTlsRenegotiation[] = ["never", "once", "freely"];
 
 export type L4ProxyHost = {
   id: number;
@@ -126,6 +158,10 @@ export type L4ProxyHost = {
   upstream_dns_resolution: L4UpstreamDnsResolutionConfig | null;
   geoblock: L4GeoBlockConfig | null;
   geoblock_mode: L4GeoBlockMode;
+  upstream_tls: L4UpstreamTlsConfig | null;
+  mtls: L4MtlsConfig | null;
+  idle_timeout: string | null;
+  certificate_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -147,10 +183,14 @@ export type L4ProxyHostInput = {
   upstream_dns_resolution?: Partial<L4UpstreamDnsResolutionConfig> | null;
   geoblock?: L4GeoBlockConfig | null;
   geoblock_mode?: L4GeoBlockMode;
+  upstream_tls?: Partial<L4UpstreamTlsConfig> | null;
+  mtls?: L4MtlsConfig | null;
+  idle_timeout?: string | null;
+  certificate_id?: number | null;
 };
 
 const VALID_PROTOCOLS: L4Protocol[] = ["tcp", "udp"];
-const VALID_MATCHER_TYPES: L4MatcherType[] = ["none", "tls_sni", "http_host", "proxy_protocol"];
+const VALID_MATCHER_TYPES: L4MatcherType[] = ["none", "tls_sni", "http_host", "proxy_protocol", "remote_ip"];
 const VALID_PROXY_PROTOCOL_VERSIONS: L4ProxyProtocolVersion[] = ["v1", "v2"];
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
@@ -354,6 +394,35 @@ function dehydrateL4UpstreamDnsResolution(
   return Object.keys(meta).length > 0 ? meta : undefined;
 }
 
+function hydrateL4UpstreamTls(meta: L4UpstreamTlsMeta | undefined): L4UpstreamTlsConfig | null {
+  if (!meta) return null;
+  return {
+    enabled: Boolean(meta.enabled),
+    insecure_skip_verify: Boolean(meta.insecure_skip_verify),
+    server_name: normalizeMetaValue(meta.server_name ?? null),
+    root_ca_pem_files: Array.isArray(meta.root_ca_pem_files)
+      ? meta.root_ca_pem_files.map(s => typeof s === "string" ? s.trim() : "").filter(Boolean)
+      : [],
+    client_certificate_file: normalizeMetaValue(meta.client_certificate_file ?? null),
+    client_certificate_key_file: normalizeMetaValue(meta.client_certificate_key_file ?? null),
+    renegotiation: meta.renegotiation && VALID_L4_UPSTREAM_TLS_RENEGOTIATION.includes(meta.renegotiation as L4UpstreamTlsRenegotiation)
+      ? (meta.renegotiation as L4UpstreamTlsRenegotiation)
+      : "never",
+  };
+}
+
+function dehydrateL4UpstreamTls(config: Partial<L4UpstreamTlsConfig> | null): L4UpstreamTlsMeta | undefined {
+  if (!config) return undefined;
+  const meta: L4UpstreamTlsMeta = { enabled: Boolean(config.enabled) };
+  if (config.insecure_skip_verify) meta.insecure_skip_verify = true;
+  if (config.server_name) meta.server_name = config.server_name;
+  if (config.root_ca_pem_files?.length) meta.root_ca_pem_files = [...config.root_ca_pem_files];
+  if (config.client_certificate_file) meta.client_certificate_file = config.client_certificate_file;
+  if (config.client_certificate_key_file) meta.client_certificate_key_file = config.client_certificate_key_file;
+  if (config.renegotiation && config.renegotiation !== "never") meta.renegotiation = config.renegotiation;
+  return meta;
+}
+
 type L4ProxyHostRow = typeof l4ProxyHosts.$inferSelect;
 
 function parseL4ProxyHost(row: L4ProxyHostRow): L4ProxyHost {
@@ -376,6 +445,10 @@ function parseL4ProxyHost(row: L4ProxyHostRow): L4ProxyHost {
     upstream_dns_resolution: hydrateL4UpstreamDnsResolution(meta.upstream_dns_resolution),
     geoblock: meta.geoblock?.enabled ? meta.geoblock : null,
     geoblock_mode: meta.geoblock_mode ?? "merge",
+    upstream_tls: hydrateL4UpstreamTls(meta.upstream_tls),
+    mtls: meta.mtls?.enabled && meta.mtls.ca_certificate_ids?.length ? meta.mtls : null,
+    idle_timeout: normalizeMetaValue(meta.idle_timeout ?? null),
+    certificate_id: typeof meta.certificate_id === "number" ? meta.certificate_id : null,
     created_at: toIso(row.createdAt)!,
     updated_at: toIso(row.updatedAt)!,
   };
@@ -418,9 +491,9 @@ function validateL4Input(input: L4ProxyHostInput | Partial<L4ProxyHostInput>, is
     throw new Error(`Matcher type must be one of: ${VALID_MATCHER_TYPES.join(", ")}`);
   }
 
-  if (input.matcher_type === "tls_sni" || input.matcher_type === "http_host") {
+  if (input.matcher_type === "tls_sni" || input.matcher_type === "http_host" || input.matcher_type === "remote_ip") {
     if (!input.matcher_value || input.matcher_value.length === 0) {
-      throw new Error("Matcher value is required for TLS SNI and HTTP Host matchers");
+      throw new Error("Matcher value is required for TLS SNI, HTTP Host, and Remote IP matchers");
     }
   }
 
@@ -520,6 +593,10 @@ export async function createL4ProxyHost(input: L4ProxyHostInput, actorUserId: nu
         if (input.upstream_dns_resolution) meta.upstream_dns_resolution = dehydrateL4UpstreamDnsResolution(input.upstream_dns_resolution);
         if (input.geoblock) meta.geoblock = input.geoblock;
         if (input.geoblock_mode && input.geoblock_mode !== "merge") meta.geoblock_mode = input.geoblock_mode;
+        if (input.upstream_tls) meta.upstream_tls = dehydrateL4UpstreamTls(input.upstream_tls);
+        if (input.mtls) meta.mtls = input.mtls;
+        if (input.idle_timeout) meta.idle_timeout = input.idle_timeout;
+        if (input.certificate_id !== undefined) meta.certificate_id = input.certificate_id;
         return Object.keys(meta).length > 0 ? JSON.stringify(meta) : null;
       })(),
       enabled: input.enabled ?? true,
@@ -567,8 +644,8 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
   if (merged.tls_termination && merged.protocol === "udp") {
     throw new Error("TLS termination is only supported with TCP protocol");
   }
-  if ((merged.matcher_type === "tls_sni" || merged.matcher_type === "http_host") && merged.matcher_value.length === 0) {
-    throw new Error("Matcher value is required for TLS SNI and HTTP Host matchers");
+  if ((merged.matcher_type === "tls_sni" || merged.matcher_type === "http_host" || merged.matcher_type === "remote_ip") && merged.matcher_value.length === 0) {
+    throw new Error("Matcher value is required for TLS SNI, HTTP Host, and Remote IP matchers");
   }
 
   validateL4Input(input, false);
@@ -596,7 +673,11 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
           input.meta !== undefined ||
           input.load_balancer !== undefined ||
           input.dns_resolver !== undefined ||
-          input.upstream_dns_resolution !== undefined;
+          input.upstream_dns_resolution !== undefined ||
+          input.upstream_tls !== undefined ||
+          input.mtls !== undefined ||
+          input.idle_timeout !== undefined ||
+          input.certificate_id !== undefined;
         if (!hasMetaChanges) return {};
 
         // Start from existing meta
@@ -606,6 +687,10 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
           ...(existing.upstream_dns_resolution ? { upstream_dns_resolution: dehydrateL4UpstreamDnsResolution(existing.upstream_dns_resolution) } : {}),
           ...(existing.geoblock ? { geoblock: existing.geoblock } : {}),
           ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
+          ...(existing.upstream_tls ? { upstream_tls: dehydrateL4UpstreamTls(existing.upstream_tls) } : {}),
+          ...(existing.mtls ? { mtls: existing.mtls } : {}),
+          ...(existing.idle_timeout ? { idle_timeout: existing.idle_timeout } : {}),
+          ...(existing.certificate_id !== null ? { certificate_id: existing.certificate_id } : {}),
         };
 
         // Apply direct meta override if provided
@@ -648,6 +733,35 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
             meta.geoblock_mode = input.geoblock_mode;
           } else {
             delete meta.geoblock_mode;
+          }
+        }
+        if (input.upstream_tls !== undefined) {
+          const ut = dehydrateL4UpstreamTls(input.upstream_tls);
+          if (ut) {
+            meta.upstream_tls = ut;
+          } else {
+            delete meta.upstream_tls;
+          }
+        }
+        if (input.mtls !== undefined) {
+          if (input.mtls && input.mtls.enabled && input.mtls.ca_certificate_ids.length > 0) {
+            meta.mtls = input.mtls;
+          } else {
+            delete meta.mtls;
+          }
+        }
+        if (input.idle_timeout !== undefined) {
+          if (input.idle_timeout) {
+            meta.idle_timeout = input.idle_timeout;
+          } else {
+            delete meta.idle_timeout;
+          }
+        }
+        if (input.certificate_id !== undefined) {
+          if (input.certificate_id !== null) {
+            meta.certificate_id = input.certificate_id;
+          } else {
+            delete meta.certificate_id;
           }
         }
 

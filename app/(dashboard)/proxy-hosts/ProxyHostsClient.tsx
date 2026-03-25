@@ -362,9 +362,9 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
               <span className="mx-1 text-muted-foreground">→</span>
               {host.upstreams[0]}
             </p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <StatusChip status={host.enabled ? "active" : "inactive"} />
-              {host.certificate_id && <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>}
+            <StatusChip status={host.enabled ? "active" : "inactive"} className="w-fit mt-1" />
+            <div className="flex flex-wrap gap-1 mt-1">
+              <ProxyFeatureBadges host={host} />
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">

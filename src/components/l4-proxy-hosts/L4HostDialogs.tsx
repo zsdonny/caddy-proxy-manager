@@ -10,6 +10,7 @@ import {
 } from "@/app/(dashboard)/l4-proxy-hosts/actions";
 import { INITIAL_ACTION_STATE } from "@/lib/actions";
 import type { L4ProxyHost } from "@/lib/models/l4-proxy-hosts";
+import type { Certificate } from "@/lib/models/certificates";
 import { AppDialog } from "@/components/ui/AppDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,10 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { Globe, Layers, Pin } from "lucide-react";
+import { UpstreamTlsFields } from "./UpstreamTlsFields";
+import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
+import { MtlsFields } from "@/components/proxy-hosts/MtlsConfig";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
 
 function FormField({
   label,
@@ -60,31 +65,42 @@ function L4HostForm({
   formAction,
   state,
   initialData,
+  certificates = [],
+  caCertificates = [],
 }: {
   formId: string;
   formAction: (formData: FormData) => void;
   state: { status: string; message?: string };
   initialData?: L4ProxyHost | null;
+  certificates?: Certificate[];
+  caCertificates?: CaCertificate[];
 }) {
   const [enabled, setEnabled] = useState(initialData?.enabled ?? true);
   const [protocol, setProtocol] = useState(initialData?.protocol ?? "tcp");
   const [matcherType, setMatcherType] = useState(
     initialData?.matcher_type ?? "none"
   );
+  const [tlsTermination, setTlsTermination] = useState(initialData?.tls_termination ?? false);
+  const isUdp = protocol === "udp";
+  const [lbEnabled, setLbEnabled] = useState(initialData?.load_balancer?.enabled ?? false);
+  const [dnsEnabled, setDnsEnabled] = useState(initialData?.dns_resolver?.enabled ?? false);
+  const [selectedCertId, setSelectedCertId] = useState<string>(String(initialData?.certificate_id ?? "__none__"));
+  const hasExplicitCert = selectedCertId !== "__none__";
 
-  const defaultLbAccordion = initialData?.load_balancer?.enabled
-    ? "load-balancer"
-    : undefined;
-  const defaultDnsAccordion = initialData?.dns_resolver?.enabled
-    ? "dns-resolver"
-    : undefined;
-  const defaultGeoblockAccordion = initialData?.geoblock?.enabled
-    ? "geoblock"
-    : undefined;
   const defaultUpstreamDnsAccordion =
     initialData?.upstream_dns_resolution?.enabled === true
       ? "upstream-dns"
       : undefined;
+
+  // Reset TLS-incompatible settings when switching to UDP
+  useEffect(() => {
+    if (isUdp) {
+      setTlsTermination(false);
+      if (matcherType === "tls_sni" || matcherType === "http_host" || matcherType === "proxy_protocol") {
+        setMatcherType("none");
+      }
+    }
+  }, [isUdp, matcherType]);
 
   return (
     <form id={formId} action={formAction} className="flex flex-col gap-5">
@@ -170,6 +186,19 @@ function L4HostForm({
       </FormField>
 
       <FormField
+        label="Connection Idle Timeout"
+        htmlFor="idle_timeout"
+        helperText="Max idle time before a connection is closed (e.g. 5m, 30s). Applies to this listen address. Leave empty for no limit."
+      >
+        <Input
+          id="idle_timeout"
+          name="idle_timeout"
+          placeholder="5m"
+          defaultValue={initialData?.idle_timeout ?? ""}
+        />
+      </FormField>
+
+      <FormField
         label="Upstreams"
         htmlFor="upstreams"
         helperText="One per line in host:port format."
@@ -191,7 +220,7 @@ function L4HostForm({
           value={matcherType}
           onValueChange={(v) =>
             setMatcherType(
-              v as "none" | "tls_sni" | "http_host" | "proxy_protocol"
+              v as "none" | "tls_sni" | "http_host" | "proxy_protocol" | "remote_ip"
             )
           }
         >
@@ -200,9 +229,10 @@ function L4HostForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">None (catch-all)</SelectItem>
-            <SelectItem value="tls_sni">TLS SNI</SelectItem>
-            <SelectItem value="http_host">HTTP Host</SelectItem>
-            <SelectItem value="proxy_protocol">Proxy Protocol</SelectItem>
+            {!isUdp && <SelectItem value="tls_sni">TLS SNI</SelectItem>}
+            {!isUdp && <SelectItem value="http_host">HTTP Host</SelectItem>}
+            {!isUdp && <SelectItem value="proxy_protocol">Proxy Protocol</SelectItem>}
+            <SelectItem value="remote_ip">Remote IP (CIDR)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
@@ -227,26 +257,86 @@ function L4HostForm({
         </FormField>
       )}
 
-      {protocol === "tcp" && (
+      {matcherType === "remote_ip" && (
+        <FormField
+          label="IP Ranges"
+          htmlFor="matcher_value"
+          helperText="Comma-separated CIDR ranges or IP addresses to match."
+        >
+          <Input
+            id="matcher_value"
+            name="matcher_value"
+            placeholder="192.168.1.0/24, 10.0.0.0/8"
+            defaultValue={initialData?.matcher_value?.join(", ") ?? ""}
+            required
+          />
+        </FormField>
+      )}
+
+      {/* TLS Termination */}
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <Switch
             id="tls_termination"
             name="tls_termination"
-            defaultChecked={initialData?.tls_termination ?? false}
+            checked={tlsTermination}
+            onCheckedChange={setTlsTermination}
+            disabled={isUdp}
           />
           <Label htmlFor="tls_termination">TLS Termination</Label>
         </div>
+        {isUdp && <p className="text-xs text-muted-foreground">Not available for UDP connections.</p>}
+        {!isUdp && !tlsTermination && (
+          <p className="text-xs text-muted-foreground">L4 proxy passes raw TCP streams without decryption.</p>
+        )}
+        {!isUdp && tlsTermination && matcherType === "tls_sni" && (
+          <p className="text-xs text-muted-foreground">Caddy will automatically provision and serve a certificate for the matched SNI domains.</p>
+        )}
+        {!isUdp && tlsTermination && matcherType !== "tls_sni" && !hasExplicitCert && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">Without TLS SNI matching, Caddy cannot automatically provision certificates. Select a specific certificate below.</p>
+        )}
+        {!isUdp && tlsTermination && matcherType !== "tls_sni" && hasExplicitCert && (
+          <p className="text-xs text-muted-foreground">The selected certificate will be used. Without SNI matching, automatic certificate provisioning is not available.</p>
+        )}
+      </div>
+
+      {/* Certificate Select — visible when TLS is ON */}
+      {tlsTermination && !isUdp && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="certificate_id">Certificate</Label>
+          <Select
+            name="certificate_id"
+            value={selectedCertId}
+            onValueChange={setSelectedCertId}
+          >
+            <SelectTrigger id="certificate_id">
+              <SelectValue placeholder="Managed by Caddy (Auto)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Managed by Caddy (Auto)</SelectItem>
+              {certificates.map((cert) => (
+                <SelectItem key={cert.id} value={String(cert.id)}>
+                  {cert.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <Switch
-          id="proxy_protocol_receive"
-          name="proxy_protocol_receive"
-          defaultChecked={initialData?.proxy_protocol_receive ?? false}
-        />
-        <Label htmlFor="proxy_protocol_receive">
-          Accept inbound PROXY protocol
-        </Label>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="proxy_protocol_receive"
+            name="proxy_protocol_receive"
+            defaultChecked={initialData?.proxy_protocol_receive ?? false}
+            disabled={isUdp}
+          />
+          <Label htmlFor="proxy_protocol_receive">
+            Accept inbound PROXY protocol
+          </Label>
+        </div>
+        {isUdp && <p className="text-xs text-muted-foreground">Not available for UDP connections.</p>}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -256,6 +346,7 @@ function L4HostForm({
         <Select
           name="proxy_protocol_version"
           defaultValue={initialData?.proxy_protocol_version ?? "__none__"}
+          disabled={isUdp}
         >
           <SelectTrigger id="proxy_protocol_version">
             <SelectValue placeholder="None" />
@@ -266,41 +357,33 @@ function L4HostForm({
             <SelectItem value="v2">v2</SelectItem>
           </SelectContent>
         </Select>
+        {isUdp && <p className="text-xs text-muted-foreground">Not available for UDP connections.</p>}
       </div>
 
       {/* Load Balancer */}
-      <Accordion
-        type="single"
-        collapsible
-        defaultValue={defaultLbAccordion}
-        className="rounded-lg border border-cyan-500/60 bg-cyan-500/5"
-      >
-        <AccordionItem value="load-balancer" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
-                <Layers className="h-4 w-4 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold leading-snug">Load Balancer</p>
-                <p className="text-sm font-normal text-muted-foreground">Configure load balancing and health checks for multiple upstreams</p>
-              </div>
+      <div className="rounded-lg border border-cyan-500/60 bg-cyan-500/5 p-4">
+        <input type="hidden" name="lb_present" value="1" />
+        <input type="hidden" name="lb_enabled_present" value="1" />
+        <input type="hidden" name="lb_enabled" value={lbEnabled ? "on" : ""} />
+
+        <div className="flex flex-row items-start justify-between gap-2">
+          <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
+              <Layers className="h-4 w-4 text-white" />
             </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="lb_present" value="1" />
-              <input type="hidden" name="lb_enabled_present" value="1" />
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="lb_enabled"
-                  name="lb_enabled"
-                  defaultChecked={
-                    initialData?.load_balancer?.enabled ?? false
-                  }
-                />
-                <Label htmlFor="lb_enabled">Enable Load Balancing</Label>
-              </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug">Load Balancer</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Configure load balancing and health checks for multiple upstreams</p>
+            </div>
+          </div>
+          <Switch checked={lbEnabled} onCheckedChange={setLbEnabled} className="shrink-0" />
+        </div>
+
+        <div className={cn(
+          "overflow-hidden transition-all duration-200",
+          lbEnabled ? "max-h-[3000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+        )}>
+          <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="lb_policy">Policy</Label>
                 <Select
@@ -468,42 +551,34 @@ function L4HostForm({
                   }
                 />
               </FormField>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+          </div>
+        </div>
+      </div>
 
       {/* DNS Resolver */}
-      <Accordion
-        type="single"
-        collapsible
-        defaultValue={defaultDnsAccordion}
-        className="rounded-lg border border-emerald-500/60 bg-emerald-500/5"
-      >
-        <AccordionItem value="dns-resolver" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
-                <Globe className="h-4 w-4 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold leading-snug">Custom DNS Resolvers</p>
-                <p className="text-sm font-normal text-muted-foreground">Configure per-host DNS resolution for upstream discovery</p>
-              </div>
+      <div className="rounded-lg border border-emerald-500/60 bg-emerald-500/5 p-4">
+        <input type="hidden" name="dns_present" value="1" />
+        <input type="hidden" name="dns_enabled_present" value="1" />
+        <input type="hidden" name="dns_enabled" value={dnsEnabled ? "on" : ""} />
+
+        <div className="flex flex-row items-start justify-between gap-2">
+          <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+              <Globe className="h-4 w-4 text-white" />
             </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="dns_present" value="1" />
-              <input type="hidden" name="dns_enabled_present" value="1" />
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="dns_enabled"
-                  name="dns_enabled"
-                  defaultChecked={initialData?.dns_resolver?.enabled ?? false}
-                />
-                <Label htmlFor="dns_enabled">Enable Custom DNS</Label>
-              </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug">Custom DNS Resolvers</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Configure per-host DNS resolution for upstream discovery</p>
+            </div>
+          </div>
+          <Switch checked={dnsEnabled} onCheckedChange={setDnsEnabled} className="shrink-0" />
+        </div>
+
+        <div className={cn(
+          "overflow-hidden transition-all duration-200",
+          dnsEnabled ? "max-h-[3000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+        )}>
+          <div className="flex flex-col gap-3">
               <FormField
                 label="DNS Resolvers"
                 htmlFor="dns_resolvers"
@@ -542,191 +617,9 @@ function L4HostForm({
                   defaultValue={initialData?.dns_resolver?.timeout ?? ""}
                 />
               </FormField>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-
-      {/* Geo Blocking */}
-      <Accordion
-        type="single"
-        collapsible
-        defaultValue={defaultGeoblockAccordion}
-        className="rounded-lg border border-rose-500/60 bg-rose-500/5"
-      >
-        <AccordionItem value="geoblock" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium hover:no-underline px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-rose-500 flex items-center justify-center shrink-0">
-                <Globe className="h-4 w-4 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold leading-snug">Geo Blocking</p>
-                <p className="text-sm font-normal text-muted-foreground">Block or allow traffic by country, continent, ASN, CIDR, or IP</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="geoblock_present" value="1" />
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="geoblock_enabled"
-                  name="geoblock_enabled"
-                  defaultChecked={initialData?.geoblock?.enabled ?? false}
-                />
-                <Label htmlFor="geoblock_enabled">Enable Geo Blocking</Label>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="geoblock_mode">Mode</Label>
-                <Select
-                  name="geoblock_mode"
-                  defaultValue={initialData?.geoblock_mode ?? "merge"}
-                >
-                  <SelectTrigger id="geoblock_mode">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="merge">
-                      Merge with global settings
-                    </SelectItem>
-                    <SelectItem value="override">
-                      Override global settings
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">
-                Block Rules
-              </p>
-              <FormField
-                label="Block Countries"
-                htmlFor="geoblock_block_countries"
-                helperText="ISO 3166-1 alpha-2 codes, comma-separated"
-              >
-                <Input
-                  id="geoblock_block_countries"
-                  name="geoblock_block_countries"
-                  placeholder="CN, RU, KP"
-                  defaultValue={
-                    initialData?.geoblock?.block_countries?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField
-                label="Block Continents"
-                htmlFor="geoblock_block_continents"
-                helperText="AF, AN, AS, EU, NA, OC, SA"
-              >
-                <Input
-                  id="geoblock_block_continents"
-                  name="geoblock_block_continents"
-                  placeholder="AF, AS"
-                  defaultValue={
-                    initialData?.geoblock?.block_continents?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Block ASNs" htmlFor="geoblock_block_asns">
-                <Input
-                  id="geoblock_block_asns"
-                  name="geoblock_block_asns"
-                  placeholder="12345, 67890"
-                  defaultValue={
-                    initialData?.geoblock?.block_asns?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Block CIDRs" htmlFor="geoblock_block_cidrs">
-                <Input
-                  id="geoblock_block_cidrs"
-                  name="geoblock_block_cidrs"
-                  placeholder="192.0.2.0/24"
-                  defaultValue={
-                    initialData?.geoblock?.block_cidrs?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Block IPs" htmlFor="geoblock_block_ips">
-                <Input
-                  id="geoblock_block_ips"
-                  name="geoblock_block_ips"
-                  placeholder="203.0.113.1"
-                  defaultValue={
-                    initialData?.geoblock?.block_ips?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">
-                Allow Rules (override blocks)
-              </p>
-              <FormField
-                label="Allow Countries"
-                htmlFor="geoblock_allow_countries"
-              >
-                <Input
-                  id="geoblock_allow_countries"
-                  name="geoblock_allow_countries"
-                  placeholder="US, DE"
-                  defaultValue={
-                    initialData?.geoblock?.allow_countries?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField
-                label="Allow Continents"
-                htmlFor="geoblock_allow_continents"
-              >
-                <Input
-                  id="geoblock_allow_continents"
-                  name="geoblock_allow_continents"
-                  placeholder="EU, NA"
-                  defaultValue={
-                    initialData?.geoblock?.allow_continents?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Allow ASNs" htmlFor="geoblock_allow_asns">
-                <Input
-                  id="geoblock_allow_asns"
-                  name="geoblock_allow_asns"
-                  placeholder="11111"
-                  defaultValue={
-                    initialData?.geoblock?.allow_asns?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Allow CIDRs" htmlFor="geoblock_allow_cidrs">
-                <Input
-                  id="geoblock_allow_cidrs"
-                  name="geoblock_allow_cidrs"
-                  placeholder="10.0.0.0/8"
-                  defaultValue={
-                    initialData?.geoblock?.allow_cidrs?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <FormField label="Allow IPs" htmlFor="geoblock_allow_ips">
-                <Input
-                  id="geoblock_allow_ips"
-                  name="geoblock_allow_ips"
-                  placeholder="1.2.3.4"
-                  defaultValue={
-                    initialData?.geoblock?.allow_ips?.join(", ") ?? ""
-                  }
-                />
-              </FormField>
-              <Alert className="mt-1">
-                <AlertDescription>
-                  At L4, geo blocking uses the client&apos;s direct IP address
-                  (no X-Forwarded-For support). Blocked connections are
-                  immediately closed.
-                </AlertDescription>
-              </Alert>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+          </div>
+        </div>
+      </div>
 
       {/* Upstream DNS Resolution / Pinning */}
       <Accordion
@@ -747,7 +640,7 @@ function L4HostForm({
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent>
+          <AccordionContent className="px-4">
             <div className="flex flex-col gap-3 pt-1">
               <input
                 type="hidden"
@@ -811,6 +704,30 @@ function L4HostForm({
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      {/* Geo Blocking */}
+      <GeoBlockFields
+        initialValues={initialData ? {
+          geoblock: initialData.geoblock ?? null,
+          geoblock_mode: initialData.geoblock_mode ?? "merge",
+        } : undefined}
+        hideAdvanced
+        customDescription="Block or allow traffic by country, continent, ASN, CIDR, or IP. Blocked connections are immediately closed."
+      />
+
+      {/* Mutual TLS (mTLS) — requires TLS termination */}
+      <MtlsFields
+        value={initialData?.mtls ?? null}
+        caCertificates={caCertificates}
+        disabled={isUdp || !tlsTermination}
+        disabledReason={isUdp ? "mTLS is not available for UDP connections." : "Enable TLS termination to configure mTLS."}
+      />
+
+      {/* Upstream TLS Dial */}
+      <UpstreamTlsFields
+        initialData={initialData?.upstream_tls}
+        disabled={isUdp}
+      />
     </form>
   );
 }
@@ -819,10 +736,14 @@ export function CreateL4HostDialog({
   open,
   onClose,
   initialData,
+  certificates = [],
+  caCertificates = [],
 }: {
   open: boolean;
   onClose: () => void;
   initialData?: L4ProxyHost | null;
+  certificates?: Certificate[];
+  caCertificates?: CaCertificate[];
 }) {
   const [state, formAction] = useFormState(
     createL4ProxyHostAction,
@@ -862,6 +783,8 @@ export function CreateL4HostDialog({
         initialData={
           initialData ? { ...initialData, name: `${initialData.name} (Copy)` } : null
         }
+        certificates={certificates}
+        caCertificates={caCertificates}
       />
     </AppDialog>
   );
@@ -871,10 +794,14 @@ export function EditL4HostDialog({
   open,
   host,
   onClose,
+  certificates = [],
+  caCertificates = [],
 }: {
   open: boolean;
   host: L4ProxyHost;
   onClose: () => void;
+  certificates?: Certificate[];
+  caCertificates?: CaCertificate[];
 }) {
   const [state, formAction] = useFormState(
     updateL4ProxyHostAction.bind(null, host.id),
@@ -912,6 +839,8 @@ export function EditL4HostDialog({
         formAction={formAction}
         state={state}
         initialData={host}
+        certificates={certificates}
+        caCertificates={caCertificates}
       />
     </AppDialog>
   );

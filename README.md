@@ -24,8 +24,8 @@
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
 | **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-plus-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-plus-caddy:latest` | Fork-exclusive |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
-| **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
-| **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI; WAF-blocked requests correctly reflected in analytics blocked counts and block-rate chart | Fork-exclusive |
+| **L4 feature parity** | Full mTLS, Geo Blocking, and Upstream TLS dial support for L4 proxy hosts — matching HTTP proxy capabilities with shared components and server-side certificate validation | Fork-exclusive |
+| **UI polish & consistency** | Optimistic toggles, submit spinners, deferred config reloads; toggle-panel pattern (no dual chevron+toggle); aligned badge variants, filter icons, and mobile cards between HTTP and L4; dynamic TLS warning text | Fork-exclusive |
 | **Interactive Storybook** | Component and page interaction tests via `@storybook/addon-vitest`; deployed to GitHub Pages on every successful CI run | Fork-exclusive |
 
 ## Quick Start

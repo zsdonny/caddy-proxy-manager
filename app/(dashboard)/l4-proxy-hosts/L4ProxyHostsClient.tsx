@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, Network, ArrowRight, Lock, Cable, Globe, Scale, Waypoints, Pin, ListFilter } from "lucide-react";
+import { MoreHorizontal, Network, ArrowRight, Lock, LockKeyhole, Cable, Globe, Scale, Waypoints, Pin, ListFilter } from "lucide-react";
 import type { L4ProxyHost } from "@/src/lib/models/l4-proxy-hosts";
 import { toggleL4ProxyHostAction } from "./actions";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -29,12 +29,16 @@ import {
 } from "@/components/ui/popover";
 import { CreateL4HostDialog, EditL4HostDialog, DeleteL4HostDialog } from "@/components/l4-proxy-hosts/L4HostDialogs";
 import { L4PortsApplyBanner } from "@/components/l4-proxy-hosts/L4PortsApplyBanner";
+import type { Certificate } from "@/lib/models/certificates";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
 
 type Props = {
   hosts: L4ProxyHost[];
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
   initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
+  certificates?: Certificate[];
+  caCertificates?: CaCertificate[];
 };
 
 function formatMatcher(host: L4ProxyHost): string {
@@ -92,12 +96,14 @@ function L4FeatureBadges({ host }: { host: L4ProxyHost }) {
   if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
   if (host.dns_resolver?.enabled) badges.push(<Badge key="dns" variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Waypoints className="h-2.5 w-2.5 mr-0.5" />DNS</Badge>);
   if (host.upstream_dns_resolution?.enabled) badges.push(<Badge key="dnspin" variant="outline" className="text-[10px] px-1.5 py-0 border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Pin className="h-2.5 w-2.5 mr-0.5" />DNS Pin</Badge>);
+  if (host.upstream_tls?.enabled) badges.push(<Badge key="utls" variant="outline" className="text-[10px] px-1.5 py-0 border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><Lock className="h-2.5 w-2.5 mr-0.5" />Upstream TLS</Badge>);
+  if (host.mtls?.enabled) badges.push(<Badge key="mtls" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><LockKeyhole className="h-2.5 w-2.5 mr-0.5" />mTLS</Badge>);
   if (badges.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
   return <div className="flex flex-wrap gap-1">{badges}</div>;
 }
 
 const L4_FEATURE_FILTERS = [
-  "TLS", "ProxyProto", "GeoBlock", "LB", "DNS", "DNS Pin",
+  "TLS", "ProxyProto", "GeoBlock", "LB", "DNS", "DNS Pin", "Upstream TLS", "mTLS",
 ] as const;
 type L4FeatureKey = (typeof L4_FEATURE_FILTERS)[number];
 
@@ -109,10 +115,12 @@ function getL4HostFeatures(host: L4ProxyHost): Set<L4FeatureKey> {
   if (host.load_balancer?.enabled) f.add("LB");
   if (host.dns_resolver?.enabled) f.add("DNS");
   if (host.upstream_dns_resolution?.enabled) f.add("DNS Pin");
+  if (host.upstream_tls?.enabled) f.add("Upstream TLS");
+  if (host.mtls?.enabled) f.add("mTLS");
   return f;
 }
 
-export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, initialSort }: Props) {
+export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, initialSort, certificates = [], caCertificates = [] }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<L4ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<L4ProxyHost | null>(null);
@@ -145,6 +153,8 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
     "LB":         <Scale     className="h-3.5 w-3.5 text-cyan-500" />,
     "DNS":        <Waypoints className="h-3.5 w-3.5 text-emerald-500" />,
     "DNS Pin":    <Pin       className="h-3.5 w-3.5 text-violet-500" />,
+    "Upstream TLS": <Lock    className="h-3.5 w-3.5 text-sky-500" />,
+    "mTLS":       <LockKeyhole className="h-3.5 w-3.5 text-amber-500" />,
   };
 
   const featuresHeaderContent = (
@@ -339,6 +349,9 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
               {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
             </p>
             <StatusChip status={(optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled) ? "active" : "inactive"} className="w-fit mt-1" />
+            <div className="flex flex-wrap gap-1 mt-1">
+              <L4FeatureBadges host={host} />
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Switch
@@ -398,6 +411,8 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
         open={createOpen}
         onClose={() => { setCreateOpen(false); setTimeout(() => setDuplicateHost(null), 200); signalBannerRefresh(); }}
         initialData={duplicateHost}
+        certificates={certificates}
+        caCertificates={caCertificates}
       />
 
       {editHost && (
@@ -405,6 +420,8 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
           open={!!editHost}
           host={editHost}
           onClose={() => { setEditHost(null); signalBannerRefresh(); }}
+          certificates={certificates}
+          caCertificates={caCertificates}
         />
       )}
 

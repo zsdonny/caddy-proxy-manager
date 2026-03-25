@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import L4ProxyHostsClient from "./L4ProxyHostsClient";
 import { listL4ProxyHostsPaginated, countL4ProxyHosts } from "@/src/lib/models/l4-proxy-hosts";
+import { listCertificates } from "@/src/lib/models/certificates";
+import { listCaCertificates } from "@/src/lib/models/ca-certificates";
 import { requireAdmin } from "@/src/lib/auth";
 const PER_PAGE = 25;
 
@@ -18,9 +20,11 @@ export default async function L4ProxyHostsPage({ searchParams }: PageProps) {
   const sortBy = sortByParam || undefined;
   const sortDir = (sortDirParam === "asc" || sortDirParam === "desc") ? sortDirParam : "desc";
 
-  const [hosts, total] = await Promise.all([
+  const [hosts, total, certs, caCerts] = await Promise.all([
     listL4ProxyHostsPaginated(PER_PAGE, offset, search, sortBy, sortDir),
     countL4ProxyHosts(search),
+    listCertificates(),
+    listCaCertificates(),
   ]);
 
   return (
@@ -29,6 +33,8 @@ export default async function L4ProxyHostsPage({ searchParams }: PageProps) {
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
       initialSort={{ sortBy: sortBy ?? "created_at", sortDir }}
+      certificates={certs}
+      caCertificates={caCerts}
     />
   );
 }

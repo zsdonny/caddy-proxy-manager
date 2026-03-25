@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { X509Certificate } from 'node:crypto';
 import db from '@/src/lib/db';
-import { proxyHosts, certificates } from '@/src/lib/db/schema';
-import { isNull, isNotNull, count } from 'drizzle-orm';
+import { proxyHosts, certificates, l4ProxyHosts } from '@/src/lib/db/schema';
+import { isNull, isNotNull, count, eq, and } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { scanAcmeCerts } from '@/src/lib/acme-certs';
@@ -28,6 +28,7 @@ export type AcmeHost = {
   certValidFrom: string | null;
   certIssuer: string | null;
   certExpiryStatus: CertExpiryStatus | null;
+  source: 'http' | 'l4';
 };
 
 export type ImportedCertView = {
@@ -94,7 +95,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
     listIssuedClientCertificates()
   ]);
 
-  const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
+  const [acmeRows, acmeTotal, certRows, usageRows, l4AcmeRows] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -123,6 +124,23 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       })
       .from(proxyHosts)
       .where(isNotNull(proxyHosts.certificateId)),
+    db
+      .select({
+        id: l4ProxyHosts.id,
+        name: l4ProxyHosts.name,
+        matcherValue: l4ProxyHosts.matcherValue,
+        enabled: l4ProxyHosts.enabled,
+        meta: l4ProxyHosts.meta,
+      })
+      .from(l4ProxyHosts)
+      .where(
+        and(
+          eq(l4ProxyHosts.enabled, true),
+          eq(l4ProxyHosts.tlsTermination, true),
+          eq(l4ProxyHosts.matcherType, "tls_sni"),
+        )
+      )
+      .orderBy(l4ProxyHosts.name),
   ]);
 
   const acmeHosts: AcmeHost[] = acmeRows.map(r => {
@@ -142,8 +160,35 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       certValidFrom: certInfo?.validFrom ?? null,
       certIssuer: certInfo?.issuer ?? null,
       certExpiryStatus: certInfo?.validTo ? getExpiryStatus(certInfo.validTo) : null,
+      source: 'http' as const,
     };
   });
+
+  // Merge L4 ACME hosts (TLS-terminating SNI hosts without a custom certificate)
+  for (const r of l4AcmeRows) {
+    const meta = r.meta ? JSON.parse(r.meta) as Record<string, unknown> : {};
+    if (meta.certificate_id) continue; // uses imported cert, not ACME
+    const domains = r.matcherValue
+      ? (r.matcherValue.startsWith('[') ? JSON.parse(r.matcherValue) as string[] : r.matcherValue.split(',').map(s => s.trim()))
+      : [];
+    let certInfo = null;
+    for (const domain of domains) {
+      const info = acmeCertMap.get(domain.toLowerCase());
+      if (info) { certInfo = info; break; }
+    }
+    acmeHosts.push({
+      id: -r.id, // negative to avoid collisions with HTTP host IDs
+      name: r.name,
+      domains,
+      ssl_forced: false,
+      enabled: r.enabled,
+      certValidTo: certInfo?.validTo ?? null,
+      certValidFrom: certInfo?.validFrom ?? null,
+      certIssuer: certInfo?.issuer ?? null,
+      certExpiryStatus: certInfo?.validTo ? getExpiryStatus(certInfo.validTo) : null,
+      source: 'l4' as const,
+    });
+  }
 
   const usageMap = new Map<number, { id: number; name: string; domains: string[] }[]>();
   for (const u of usageRows) {
@@ -195,7 +240,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       importedCerts={importedCerts}
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
-      acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
+      acmePagination={{ total: acmeHosts.length, page, perPage: PER_PAGE }}
     />
   );
 }

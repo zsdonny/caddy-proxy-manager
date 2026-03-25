@@ -19,14 +19,18 @@ import {
   type L4UpstreamDnsResolutionConfig,
   type L4GeoBlockConfig,
   type L4GeoBlockMode,
+  type L4UpstreamTlsConfig,
+  type L4UpstreamTlsRenegotiation,
+  type L4MtlsConfig,
 } from "@/src/lib/models/l4-proxy-hosts";
 import { parseCheckbox, parseCsv, parseUpstreams, parseOptionalText, parseOptionalNumber } from "@/src/lib/form-parse";
 
 const VALID_PROTOCOLS: L4Protocol[] = ["tcp", "udp"];
-const VALID_MATCHER_TYPES: L4MatcherType[] = ["none", "tls_sni", "http_host", "proxy_protocol"];
+const VALID_MATCHER_TYPES: L4MatcherType[] = ["none", "tls_sni", "http_host", "proxy_protocol", "remote_ip"];
 const VALID_PP_VERSIONS: L4ProxyProtocolVersion[] = ["v1", "v2"];
 const VALID_L4_LB_POLICIES: L4LoadBalancingPolicy[] = ["random", "round_robin", "least_conn", "ip_hash", "first"];
 const VALID_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
+const VALID_RENEGOTIATION: L4UpstreamTlsRenegotiation[] = ["never", "once", "freely"];
 
 function parseL4LoadBalancerConfig(formData: FormData): Partial<L4LoadBalancerConfig> | undefined {
   if (!formData.has("lb_present")) return undefined;
@@ -163,6 +167,39 @@ function parseProxyProtocolVersion(formData: FormData): L4ProxyProtocolVersion |
   return null;
 }
 
+function parseL4UpstreamTlsConfig(formData: FormData): Partial<L4UpstreamTlsConfig> | undefined {
+  if (!formData.has("upstream_tls_present")) return undefined;
+  const enabled = parseCheckbox(formData.get("upstream_tls_enabled"));
+  const insecure_skip_verify = parseCheckbox(formData.get("upstream_tls_insecure_skip_verify"));
+  const server_name = parseOptionalText(formData.get("upstream_tls_server_name"));
+  const rootCaRaw = parseOptionalText(formData.get("upstream_tls_root_ca_pem_files"));
+  const root_ca_pem_files = rootCaRaw
+    ? rootCaRaw.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+    : [];
+  const client_certificate_file = parseOptionalText(formData.get("upstream_tls_client_cert_file"));
+  const client_certificate_key_file = parseOptionalText(formData.get("upstream_tls_client_key_file"));
+  const renegotiationRaw = parseOptionalText(formData.get("upstream_tls_renegotiation"));
+  const renegotiation: L4UpstreamTlsRenegotiation = renegotiationRaw && VALID_RENEGOTIATION.includes(renegotiationRaw as L4UpstreamTlsRenegotiation)
+    ? (renegotiationRaw as L4UpstreamTlsRenegotiation) : "never";
+
+  return {
+    enabled,
+    insecure_skip_verify,
+    server_name,
+    root_ca_pem_files,
+    client_certificate_file,
+    client_certificate_key_file,
+    renegotiation,
+  };
+}
+
+function parseL4MtlsConfig(formData: FormData): L4MtlsConfig | undefined {
+  if (!formData.has("mtls_present")) return undefined;
+  const enabled = formData.get("mtls_enabled") === "true";
+  const ids = formData.getAll("mtls_ca_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  return { enabled, ca_certificate_ids: ids };
+}
+
 export async function createL4ProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
@@ -173,9 +210,19 @@ export async function createL4ProxyHostAction(
     const userId = Number(session.user.id);
 
     const matcherType = parseMatcherType(formData);
-    const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host")
+    const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host" || matcherType === "remote_ip")
       ? parseCsv(formData.get("matcher_value"))
       : [];
+
+    const idleTimeout = parseOptionalText(formData.get("idle_timeout"));
+    const certificateIdRaw = parseOptionalText(formData.get("certificate_id"));
+    const certificateId = certificateIdRaw && certificateIdRaw !== "__none__" ? parseInt(certificateIdRaw, 10) : null;
+
+    // TLS termination without SNI requires an explicit certificate
+    const tlsTermination = parseCheckbox(formData.get("tls_termination"));
+    if (tlsTermination && matcherType !== "tls_sni" && !certificateId) {
+      return actionError(null, "TLS termination without SNI matching requires a specific certificate. Select a certificate or switch the matcher to TLS SNI.");
+    }
 
     const input: L4ProxyHostInput = {
       name: String(formData.get("name") ?? "Untitled"),
@@ -184,13 +231,17 @@ export async function createL4ProxyHostAction(
       upstreams: parseUpstreams(formData.get("upstreams")),
       matcher_type: matcherType,
       matcher_value: matcherValue,
-      tls_termination: parseCheckbox(formData.get("tls_termination")),
+      tls_termination: tlsTermination,
       proxy_protocol_version: parseProxyProtocolVersion(formData),
       proxy_protocol_receive: parseCheckbox(formData.get("proxy_protocol_receive")),
       enabled: parseCheckbox(formData.get("enabled")),
       load_balancer: parseL4LoadBalancerConfig(formData),
       dns_resolver: parseL4DnsResolverConfig(formData),
       upstream_dns_resolution: parseL4UpstreamDnsResolutionConfig(formData),
+      upstream_tls: parseL4UpstreamTlsConfig(formData),
+      mtls: parseL4MtlsConfig(formData),
+      idle_timeout: idleTimeout,
+      certificate_id: certificateId,
       ...parseL4GeoBlockConfig(formData),
     };
 
@@ -215,9 +266,19 @@ export async function updateL4ProxyHostAction(
     const userId = Number(session.user.id);
 
     const matcherType = parseMatcherType(formData);
-    const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host")
+    const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host" || matcherType === "remote_ip")
       ? parseCsv(formData.get("matcher_value"))
       : [];
+
+    const idleTimeout = parseOptionalText(formData.get("idle_timeout"));
+    const certificateIdRaw = parseOptionalText(formData.get("certificate_id"));
+    const certificateId = certificateIdRaw && certificateIdRaw !== "__none__" ? parseInt(certificateIdRaw, 10) : null;
+
+    // TLS termination without SNI requires an explicit certificate
+    const tlsTermination = parseCheckbox(formData.get("tls_termination"));
+    if (tlsTermination && matcherType !== "tls_sni" && !certificateId) {
+      return actionError(null, "TLS termination without SNI matching requires a specific certificate. Select a certificate or switch the matcher to TLS SNI.");
+    }
 
     const input: Partial<L4ProxyHostInput> = {
       name: formData.get("name") ? String(formData.get("name")) : undefined,
@@ -226,13 +287,17 @@ export async function updateL4ProxyHostAction(
       upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
       matcher_type: matcherType,
       matcher_value: matcherValue,
-      tls_termination: parseCheckbox(formData.get("tls_termination")),
+      tls_termination: tlsTermination,
       proxy_protocol_version: parseProxyProtocolVersion(formData),
       proxy_protocol_receive: parseCheckbox(formData.get("proxy_protocol_receive")),
       enabled: formData.has("enabled_present") ? parseCheckbox(formData.get("enabled")) : undefined,
       load_balancer: parseL4LoadBalancerConfig(formData),
       dns_resolver: parseL4DnsResolverConfig(formData),
       upstream_dns_resolution: parseL4UpstreamDnsResolutionConfig(formData),
+      upstream_tls: parseL4UpstreamTlsConfig(formData),
+      mtls: parseL4MtlsConfig(formData),
+      idle_timeout: idleTimeout,
+      certificate_id: certificateId,
       ...parseL4GeoBlockConfig(formData),
     };
 

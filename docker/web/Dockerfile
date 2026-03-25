@@ -48,7 +48,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 COPY --chown=nextjs:nodejs docker/web/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 3000
 USER nextjs

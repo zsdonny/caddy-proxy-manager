@@ -489,7 +489,7 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
 
 type RulesPanelProps = {
   prefix: "block" | "allow";
-  initial: GeoBlockSettings | null;
+  initial: GeoBlockSettings | GeoBlockRules | null;
 };
 
 function RulesPanel({ prefix, initial }: RulesPanelProps) {
@@ -559,16 +559,26 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
 
 // ─── GeoBlockFields ───────────────────────────────────────────────────────────
 
+type GeoBlockRules = Pick<GeoBlockSettings,
+  'enabled' | 'block_countries' | 'block_continents' | 'block_asns' | 'block_cidrs' | 'block_ips' |
+  'allow_countries' | 'allow_continents' | 'allow_asns' | 'allow_cidrs' | 'allow_ips'
+>;
+
 type GeoBlockFieldsProps = {
   initialValues?: {
-    geoblock: GeoBlockSettings | null;
+    geoblock: GeoBlockSettings | GeoBlockRules | null;
     geoblock_mode: GeoBlockMode;
   };
   showModeSelector?: boolean;
+  /** Hide the trusted-proxies / block-response accordion (used for L4) */
+  hideAdvanced?: boolean;
+  /** Replace the default description text */
+  customDescription?: string;
 };
 
-export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBlockFieldsProps) {
+export function GeoBlockFields({ initialValues, showModeSelector = true, hideAdvanced = false, customDescription }: GeoBlockFieldsProps) {
   const initial = initialValues?.geoblock ?? null;
+  const initialFull = initial as GeoBlockSettings | null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
   const [mode, setMode] = useState<GeoBlockMode>(initialValues?.geoblock_mode ?? "merge");
 
@@ -588,7 +598,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
               <GeoIpStatus />
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Block or allow traffic by country, continent, ASN, CIDR, or IP
+              {customDescription ?? "Block or allow traffic by country, continent, ASN, CIDR, or IP"}
             </p>
           </div>
         </div>
@@ -654,6 +664,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
         </Tabs>
 
         {/* Advanced: Trusted Proxies + Block Response */}
+        {!hideAdvanced && (
         <div className="mt-6">
           <Accordion type="single" collapsible>
             <AccordionItem value="advanced" className="border rounded-lg border-border">
@@ -665,7 +676,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                   <TagInput
                     name="geoblock_trusted_proxies"
                     label="Trusted Proxies"
-                    initialValues={initial?.trusted_proxies ?? []}
+                    initialValues={initialFull?.trusted_proxies ?? []}
                     placeholder="private_ranges, 10.0.0.0/8…"
                     helperText="Used to parse X-Forwarded-For. Use private_ranges for all RFC-1918 ranges."
                   />
@@ -674,7 +685,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     <Checkbox
                       id="geoblock-fail-closed"
                       name="geoblock_fail_closed"
-                      defaultChecked={initial?.fail_closed ?? false}
+                      defaultChecked={initialFull?.fail_closed ?? false}
                     />
                     <label htmlFor="geoblock-fail-closed" className="text-sm cursor-pointer">
                       Fail closed (block indeterminate IPs)
@@ -691,7 +702,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                         type="number"
                         min={100}
                         max={599}
-                        defaultValue={initial?.response_status ?? 403}
+                        defaultValue={initialFull?.response_status ?? 403}
                         className="h-8 text-sm"
                       />
                       <p className="text-xs text-muted-foreground mt-1">HTTP status when blocked</p>
@@ -700,7 +711,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                       <label className="text-sm font-medium mb-1 block">Response Body</label>
                       <Input
                         name="geoblock_response_body"
-                        defaultValue={initial?.response_body ?? "Forbidden"}
+                        defaultValue={initialFull?.response_body ?? "Forbidden"}
                         className="h-8 text-sm"
                       />
                       <p className="text-xs text-muted-foreground mt-1">Body text returned to blocked clients</p>
@@ -709,7 +720,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                       <label className="text-sm font-medium mb-1 block">Redirect URL</label>
                       <Input
                         name="geoblock_redirect_url"
-                        defaultValue={initial?.redirect_url ?? ""}
+                        defaultValue={initialFull?.redirect_url ?? ""}
                         placeholder="https://example.com/blocked"
                         className="h-8 text-sm"
                       />
@@ -717,12 +728,13 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     </div>
                   </div>
 
-                  <ResponseHeadersEditor initialHeaders={initial?.response_headers ?? {}} />
+                  <ResponseHeadersEditor initialHeaders={initialFull?.response_headers ?? {}} />
                 </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
         </div>
+        )}
       </div>
     </div>
   );
