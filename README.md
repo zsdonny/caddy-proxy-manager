@@ -13,6 +13,9 @@
 
 [![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml)
 [![Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml)
+[![Backend Tests](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/backend.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/frontend.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/frontend.yml)
+[![Storybook](https://img.shields.io/badge/Storybook-live-ff4785?logo=storybook&logoColor=white)](https://zsdonny.github.io/caddy-proxy-manager-plus/)
 
 ## Changes from Upstream
 
@@ -25,6 +28,7 @@
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
 | **UI enhancements** | Optimistic toggles, submit spinners, deferred Caddy config reloads, connection-error banner with auto-recovery; colored config-builder icons; host tables with Features column, icon badges, and dropdown filter | Fork-exclusive |
 | **Instance sync & bug fixes** | Replica settings page auto-refreshes on sync with toast notifications; proxy host duplication correctly copies all geoblock settings; sync cache revalidation prevents stale replica UI; WAF-blocked requests correctly reflected in analytics blocked counts and block-rate chart | Fork-exclusive |
+| **Interactive Storybook** | Component and page interaction tests via `@storybook/addon-vitest`; deployed to GitHub Pages on every successful CI run; visual regression testing via Chromatic (manual trigger) | Fork-exclusive |
 
 ## Quick Start
 

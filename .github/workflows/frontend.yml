@@ -1,0 +1,152 @@
+name: Frontend
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'stories/**'
+      - 'src/**'
+      - 'app/**'
+      - '.storybook/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'vitest.workspace.ts'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'stories/**'
+      - 'src/**'
+      - 'app/**'
+      - '.storybook/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'vitest.workspace.ts'
+  workflow_dispatch:
+    inputs:
+      run_chromatic:
+        description: 'Run Chromatic visual tests'
+        type: boolean
+        default: false
+
+jobs:
+  storybook-test:
+    name: Storybook Tests
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium --with-deps
+
+      - name: Run Storybook interaction tests
+        run: bun run test:storybook
+
+  deploy-storybook:
+    name: Deploy Storybook
+    needs: storybook-test
+    # Always run on develop push (not PRs); deploy only if tests passed
+    if: always() && github.ref == 'refs/heads/develop' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Storybook
+        run: bun run build-storybook
+
+      - name: Inject warning banner (tests failed)
+        if: needs.storybook-test.result != 'success'
+        run: |
+          cat > /tmp/inject-banner.py << 'PYEOF'
+          import pathlib
+          p = pathlib.Path("storybook-static/index.html")
+          html = p.read_text()
+          banner = (
+              '<div style="position:fixed;top:0;left:0;right:0;z-index:99999;'
+              'background:#f59e0b;color:#1a1a1a;text-align:center;'
+              'padding:8px 16px;font:500 13px sans-serif">'
+              '&#9888;&#65039; This build has failing interaction tests and was not published. '
+              'Visit the <a href="https://zsdonny.github.io/caddy-proxy-manager-plus/" '
+              'style="color:#1a1a1a;font-weight:bold">live Storybook</a>'
+              ' for the latest stable version.</div>'
+          )
+          p.write_text(html.replace("</head>", banner + "</head>", 1))
+          PYEOF
+          python3 /tmp/inject-banner.py
+
+      - name: Upload Storybook artifact (always — for inspection)
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
+        with:
+          name: storybook-static
+          path: storybook-static/
+          retention-days: 7
+
+      - name: Configure GitHub Pages
+        if: needs.storybook-test.result == 'success'
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
+
+      - name: Upload to GitHub Pages
+        if: needs.storybook-test.result == 'success'
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
+        with:
+          path: storybook-static/
+
+      - name: Deploy to GitHub Pages
+        if: needs.storybook-test.result == 'success'
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4
+
+  chromatic:
+    name: Chromatic Visual Tests
+    if: inputs.run_chromatic == true
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Chromatic
+        uses: chromaui/action@1cfa065cbdab28f6ca3afaeb3d761383076a35aa  # v11
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          onlyChanged: true
+          exitOnceUploaded: true

@@ -1,17 +1,15 @@
-name: Tests
+name: Backend Tests
 
 on:
   push:
     branches:
-      - main
       - develop
   pull_request:
     branches:
-      - main
       - develop
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
     # Zero out GITHUB_TOKEN permissions — tests have no external dependencies and
     # need no credentials. No secrets: references in this workflow either, so no
