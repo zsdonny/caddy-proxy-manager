@@ -39,8 +39,8 @@ RUN (getent group ${PGID} && groupdel $(getent group ${PGID} | cut -d: -f1) || t
     (getent passwd ${PUID} && userdel $(getent passwd ${PUID} | cut -d: -f1) || true) && \
     groupadd -g ${PGID} caddy && \
     useradd -r -u ${PUID} -g caddy -m -d /home/caddy caddy && \
-    mkdir -p /data /config /logs && \
-    chown -R caddy:caddy /data /config /logs /home/caddy
+    mkdir -p /data /config /logs /tmp/modsecurity/upload && \
+    chown -R caddy:caddy /data /config /logs /tmp/modsecurity/upload /home/caddy
 
 COPY --chown=caddy:caddy docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
