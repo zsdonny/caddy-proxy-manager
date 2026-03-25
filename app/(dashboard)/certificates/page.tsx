@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { X509Certificate } from 'node:crypto';
 import db from '@/src/lib/db';
 import { proxyHosts, certificates, l4ProxyHosts } from '@/src/lib/db/schema';
-import { isNull, isNotNull, count, eq, and } from 'drizzle-orm';
+import { isNull, isNotNull, count, eq, and, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { scanAcmeCerts } from '@/src/lib/acme-certs';
@@ -106,7 +106,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       })
       .from(proxyHosts)
       .where(isNull(proxyHosts.certificateId))
-      .orderBy(proxyHosts.name)
+      .orderBy(desc(proxyHosts.id))
       .limit(PER_PAGE)
       .offset(offset),
     db
@@ -140,7 +140,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
           eq(l4ProxyHosts.matcherType, "tls_sni"),
         )
       )
-      .orderBy(l4ProxyHosts.name),
+      .orderBy(desc(l4ProxyHosts.id)),
   ]);
 
   const acmeHosts: AcmeHost[] = acmeRows.map(r => {

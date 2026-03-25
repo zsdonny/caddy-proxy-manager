@@ -1841,7 +1841,7 @@ async function buildCaddyDocument() {
         mode: "0640",
         roll_size_mb: 50,
         roll_keep: 3,
-        roll_keep_for_days: 7,
+        roll_keep_days: 7,
       },
       encoder: { format: "json" },
       include: ["http.handlers.waf"],
@@ -1856,7 +1856,7 @@ async function buildCaddyDocument() {
         mode: "0640",
         roll_size_mb: 50,
         roll_keep: 3,
-        roll_keep_for_days: 7,
+        roll_keep_days: 7,
       },
       encoder: { format: loggingFormat },
       include: ["http.log.access"]
