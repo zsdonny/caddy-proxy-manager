@@ -94,7 +94,7 @@ export const L4Mode: Story = {
 // ── Interaction tests ─────────────────────────────────────────────────────────
 
 export const RejectsBareIpInCidrField: Story = {
-  name: '▶ Rejects bare IP in CIDRs field (toast)',
+  name: '▶ Rejects bare IP in CIDRs field',
   args: {
     initialValues: {
       geoblock: {
@@ -114,7 +114,6 @@ export const RejectsBareIpInCidrField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
     const canvas = within(canvasElement);
 
     // Find the CIDRs input by its placeholder
@@ -124,9 +123,9 @@ export const RejectsBareIpInCidrField: Story = {
     await userEvent.clear(cidrInput);
     await userEvent.type(cidrInput, '192.168.1.1{Enter}');
 
-    // Toast should appear with the error message
+    // Inline error should appear below the field
     await waitFor(() =>
-      expect(body.getByText(/CIDRs must include \/mask/i)).toBeTruthy()
+      expect(canvas.getByText(/CIDRs must include \/mask/i)).toBeTruthy()
     );
 
     // The bare IP should NOT appear as a tag
@@ -138,7 +137,7 @@ export const RejectsBareIpInCidrField: Story = {
 };
 
 export const RejectsIpv6BareInCidrField: Story = {
-  name: '▶ Rejects :: in CIDRs field (toast)',
+  name: '▶ Rejects :: in CIDRs field',
   args: {
     initialValues: {
       geoblock: {
@@ -158,7 +157,6 @@ export const RejectsIpv6BareInCidrField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
     const canvas = within(canvasElement);
 
     const cidrInput = await canvas.findByPlaceholderText('10.0.0.0/8…');
@@ -166,7 +164,7 @@ export const RejectsIpv6BareInCidrField: Story = {
     await userEvent.type(cidrInput, '::{Enter}');
 
     await waitFor(() =>
-      expect(body.getByText(/CIDRs must include \/mask/i)).toBeTruthy()
+      expect(canvas.getByText(/CIDRs must include \/mask/i)).toBeTruthy()
     );
   },
 };
@@ -206,7 +204,7 @@ export const AcceptsValidCidr: Story = {
 };
 
 export const RejectsInvalidAsn: Story = {
-  name: '▶ Rejects non-numeric ASN (toast)',
+  name: '▶ Rejects non-numeric ASN',
   args: {
     initialValues: {
       geoblock: {
@@ -226,7 +224,6 @@ export const RejectsInvalidAsn: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
     const canvas = within(canvasElement);
 
     const asnInput = await canvas.findByPlaceholderText('13335, 15169…');
@@ -234,13 +231,13 @@ export const RejectsInvalidAsn: Story = {
     await userEvent.type(asnInput, 'abc{Enter}');
 
     await waitFor(() =>
-      expect(body.getByText(/ASN must be a number/i)).toBeTruthy()
+      expect(canvas.getByText(/ASN must be a number/i)).toBeTruthy()
     );
   },
 };
 
 export const RejectsCidrInIpField: Story = {
-  name: '▶ Rejects CIDR in IP field (toast)',
+  name: '▶ Rejects CIDR in IP field',
   args: {
     initialValues: {
       geoblock: {
@@ -260,7 +257,6 @@ export const RejectsCidrInIpField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
     const canvas = within(canvasElement);
 
     const ipInput = await canvas.findByPlaceholderText('1.2.3.4…');
@@ -268,7 +264,7 @@ export const RejectsCidrInIpField: Story = {
     await userEvent.type(ipInput, '10.0.0.0/8{Enter}');
 
     await waitFor(() =>
-      expect(body.getByText(/use the CIDRs field for ranges/i)).toBeTruthy()
+      expect(canvas.getByText(/use the CIDRs field for ranges/i)).toBeTruthy()
     );
   },
 };

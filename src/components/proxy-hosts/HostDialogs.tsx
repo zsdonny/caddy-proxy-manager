@@ -55,7 +55,6 @@ export function CreateHostDialog({
             setIsPending(false);
             onClose();
         } else if (state.status === "error") {
-            if (state.message) toast.error(state.message);
             setIsPending(false);
         }
     }, [state.status, state.message, onClose]);
@@ -206,7 +205,6 @@ export function EditHostDialog({
             setIsPending(false);
             onClose();
         } else if (state.status === "error") {
-            if (state.message) toast.error(state.message);
             setIsPending(false);
         }
     }, [state.status, state.message, onClose]);
@@ -341,7 +339,6 @@ export function DeleteHostDialog({
             setIsPending(false);
             onClose();
         } else if (state.status === "error") {
-            if (state.message) toast.error(state.message);
             setIsPending(false);
         }
     }, [state.status, state.message, onClose]);

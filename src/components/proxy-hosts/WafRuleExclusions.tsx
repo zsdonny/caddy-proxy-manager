@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 type Props = {
   value?: number[];
@@ -14,13 +13,15 @@ type Props = {
 export function WafRuleExclusions({ value }: Props) {
   const [ids, setIds] = useState<number[]>(value ?? []);
   const [inputVal, setInputVal] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function addId() {
     const n = parseInt(inputVal.trim(), 10);
     if (!Number.isInteger(n) || n <= 0) {
-      if (inputVal.trim()) toast.error("Rule ID must be a positive number");
+      if (inputVal.trim()) setError("Rule ID must be a positive number");
       return;
     }
+    setError(null);
     if (ids.includes(n)) { setInputVal(""); return; }
     setIds((prev) => [...prev, n]);
     setInputVal("");
@@ -60,16 +61,17 @@ export function WafRuleExclusions({ value }: Props) {
           size={1}
           placeholder="Rule ID"
           value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
+          onChange={(e) => { setInputVal(e.target.value); setError(null); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addId(); } }}
           inputMode="numeric"
           pattern="[0-9]*"
-          className="flex-1 h-8 text-sm"
+          className={`flex-1 h-8 text-sm${error ? " border-destructive" : ""}`}
         />
         <Button type="button" size="icon" variant="ghost" onClick={addId} className="h-8 w-8">
           <Plus className="h-4 w-4" />
         </Button>
       </div>
+      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
     </div>
   );
 }

@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -363,6 +362,7 @@ type TagInputProps = {
 function TagInput({ name, label, initialValues = [], placeholder, helperText, validate, validationMessage, uppercase = false }: TagInputProps) {
   const [tags, setTags] = useState<string[]>(initialValues);
   const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function processValue(raw: string): string {
     return uppercase ? raw.trim().toUpperCase() : raw.trim();
@@ -372,9 +372,10 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
     const value = processValue(raw);
     if (!value) return;
     if (validate && !validate(value)) {
-      toast.error(validationMessage ?? `Invalid ${label.toLowerCase()} value: ${value}`);
+      setError(validationMessage ?? `Invalid ${label.toLowerCase()} value: ${value}`);
       return;
     }
+    setError(null);
     if (tags.includes(value)) {
       setInputValue("");
       return;
@@ -388,7 +389,8 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
       <input type="hidden" name={name} value={tags.join(",")} />
       <label className="text-sm font-medium mb-1 block">{label}</label>
       <div className={cn(
-        "flex flex-wrap items-center gap-1 min-h-9 border border-input rounded-md px-3 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+        "flex flex-wrap items-center gap-1 min-h-9 border rounded-md px-3 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+        error ? "border-destructive" : "border-input",
         tags.length > 0 && "pb-1"
       )}>
         {tags.map((tag) => (
@@ -424,6 +426,7 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
         />
       </div>
       {helperText && <p className="text-xs text-muted-foreground mt-1">{helperText}</p>}
+      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
     </div>
   );
 }
