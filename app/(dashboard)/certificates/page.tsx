@@ -6,7 +6,7 @@ import { proxyHosts, certificates, l4ProxyHosts } from '@/src/lib/db/schema';
 import { isNull, isNotNull, count, eq, and, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
-import { scanAcmeCerts } from '@/src/lib/acme-certs';
+import { getAcmeCertMap } from '@/src/lib/acme-certs';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 export type { CaCertificate };
@@ -88,7 +88,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const offset = (page - 1) * PER_PAGE;
-  const acmeCertMap = scanAcmeCerts();
+  const acmeCertMap = await getAcmeCertMap();
 
   const [caCerts, issuedClientCerts] = await Promise.all([
     listCaCertificates(),

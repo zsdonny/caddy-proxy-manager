@@ -1946,6 +1946,10 @@ export async function applyCaddyConfig() {
     }
 
     await syncInstances();
+
+    // Schedule a debounced TLS probe after Caddy obtains ACME certs.
+    // Rapid config applies coalesce into a single probe run.
+    import("./acme-certs").then(({ scheduleCertRefresh }) => scheduleCertRefresh());
   } catch (error) {
     console.error("Failed to apply Caddy config", error);
 

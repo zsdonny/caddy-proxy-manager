@@ -18,6 +18,7 @@ type CaddyMonitorState = {
 const HEALTH_CHECK_INTERVAL = 10000; // Check every 10 seconds
 const MAX_CONSECUTIVE_FAILURES = 3; // Consider unhealthy after 3 failures
 const REAPPLY_DELAY = 5000; // Wait 5 seconds after detecting restart before reapplying
+const CERT_REFRESH_INTERVAL = 60; // Every 60 health checks (~10 min), refresh stale certs
 
 const monitorState: CaddyMonitorState = {
   isHealthy: false,
@@ -28,6 +29,7 @@ const monitorState: CaddyMonitorState = {
 
 let monitorInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
+let healthCheckCount = 0;
 
 /**
  * Get the current Caddy config ID from the admin API
@@ -129,6 +131,17 @@ async function checkCaddyHealth(): Promise<void> {
   } else {
     // Normal operation, update last known config ID
     monitorState.lastConfigId = currentConfigId;
+  }
+
+  // Periodically refresh stale ACME cert cache (~every 10 minutes)
+  healthCheckCount++;
+  if (monitorState.isHealthy && healthCheckCount % CERT_REFRESH_INTERVAL === 0) {
+    try {
+      const { refreshStaleCertCache } = await import("./acme-certs");
+      await refreshStaleCertCache(); // default 6h max age
+    } catch (err) {
+      console.error("[CaddyMonitor] cert cache refresh failed:", err);
+    }
   }
 }
 

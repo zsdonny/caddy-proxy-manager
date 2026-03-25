@@ -291,3 +291,13 @@ export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const acmeCertCache = sqliteTable("acme_cert_cache", {
+  domain: text("domain").primaryKey(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to").notNull(),
+  issuer: text("issuer").notNull(),
+  sanDomains: text("san_domains").notNull(), // JSON array
+  probedAt: text("probed_at").notNull(),
+  probeTarget: text("probe_target").notNull(),
+});
