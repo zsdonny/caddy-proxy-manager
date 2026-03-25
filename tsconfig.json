@@ -47,6 +47,8 @@
   ],
   "exclude": [
     "node_modules",
-    "stories"
+    "stories",
+    "vitest.workspace.ts",
+    "vitest.config.ts"
   ]
 }
