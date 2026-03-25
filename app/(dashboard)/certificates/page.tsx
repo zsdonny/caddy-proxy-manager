@@ -167,7 +167,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   }, new Map());
   const caCertificateViews: CaCertificateView[] = caCerts.map((cert) => ({
     ...cert,
-    issuedCerts: issuedByCa.get(cert.id) ?? [],
+    issuedCerts: (issuedByCa.get(cert.id) ?? []) as IssuedClientCertificate[],
   }));
 
   for (const cert of certRows) {
