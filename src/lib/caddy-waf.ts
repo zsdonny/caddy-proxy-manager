@@ -114,6 +114,13 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
 
   parts.push(
     `SecRuleEngine ${waf.mode}`,
+    // Enable request body inspection so rules can match POST/PUT payloads (SQLi, XSS in forms).
+    // When OWASP CRS is loaded, @coraza.conf-recommended already sets these — our directives
+    // come after and ensure the same limits apply regardless, so custom-only WAF configs also
+    // get body inspection.  Users can override via custom_directives (which are appended last).
+    'SecRequestBodyAccess On',
+    'SecRequestBodyLimit 13107200',      // 12.5 MB (same as CRS default)
+    'SecRequestBodyNoFilesLimit 131072', // 128 KB (same as CRS default)
     // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
     // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
     // Clean requests with no rule matches are silently skipped, avoiding massive log growth.

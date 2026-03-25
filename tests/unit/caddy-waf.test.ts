@@ -144,6 +144,19 @@ describe('buildWafHandler — handler structure', () => {
     expect(handler.directives).toContain('SecAuditLog /logs/waf-audit.log');
     expect(handler.directives).toContain('SecAuditLogFormat JSON');
   });
+
+  it('always enables request body inspection with sensible limits', () => {
+    const handler = buildWafHandler(baseWaf);
+    expect(handler.directives).toContain('SecRequestBodyAccess On');
+    expect(handler.directives).toContain('SecRequestBodyLimit 13107200');
+    expect(handler.directives).toContain('SecRequestBodyNoFilesLimit 131072');
+  });
+
+  it('emits request body directives even when OWASP CRS is loaded', () => {
+    const handler = buildWafHandler({ ...baseWaf, load_owasp_crs: true });
+    expect(handler.directives).toContain('SecRequestBodyAccess On');
+    expect(handler.directives).toContain('SecRequestBodyLimit 13107200');
+  });
 });
 
 // ---------------------------------------------------------------------------
