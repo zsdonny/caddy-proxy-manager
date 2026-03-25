@@ -1,4 +1,4 @@
-name: Frontend
+name: Frontend Tests
 
 on:
   push:
@@ -63,8 +63,9 @@ jobs:
     permissions:
       pages: write
       id-token: write
+      deployments: write
     environment:
-      name: github-pages
+      name: storybook
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
@@ -124,6 +125,21 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4
 
+      - name: Clean up old deployments
+        if: needs.storybook-test.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Delete all storybook environment deployments except the newest one
+          OLD_IDS=$(gh api "repos/${{ github.repository }}/deployments?environment=storybook&per_page=100" \
+            --jq 'sort_by(.created_at) | reverse | .[1:] | .[].id')
+          for id in $OLD_IDS; do
+            gh api "repos/${{ github.repository }}/deployments/$id/statuses" \
+              --method POST --field state=inactive --silent
+            gh api "repos/${{ github.repository }}/deployments/$id" \
+              --method DELETE --silent
+          done
+
   chromatic:
     name: Chromatic Visual Tests
     if: inputs.run_chromatic == true
@@ -150,3 +166,4 @@ jobs:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           onlyChanged: true
           exitOnceUploaded: true
+
