@@ -16,8 +16,11 @@ const meta: Meta<typeof AuditLogClient> = {
 export default meta;
 type Story = StoryObj<typeof AuditLogClient>;
 
+// War. War never changes. Neither should this timestamp. (Fallout Great War: Oct 23, 2077)
+const FIXED_NOW = new Date('2077-10-23T09:47:00Z').getTime();
+
 function dt(offsetMinutes: number): string {
-  return new Date(Date.now() - offsetMinutes * 60 * 1000).toISOString();
+  return new Date(FIXED_NOW - offsetMinutes * 60 * 1000).toISOString();
 }
 
 const mockEvents: EventRow[] = [
