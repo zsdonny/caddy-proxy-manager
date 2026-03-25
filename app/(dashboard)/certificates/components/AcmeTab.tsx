@@ -35,7 +35,6 @@ const columns = [
               <span className="inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-[10px] font-bold text-sky-500 leading-4">L4</span>
             )}
           </div>
-          <p className="text-sm font-semibold leading-tight">{r.name}</p>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">
             {r.domains[0]}
             {r.domains.length > 1 && (
