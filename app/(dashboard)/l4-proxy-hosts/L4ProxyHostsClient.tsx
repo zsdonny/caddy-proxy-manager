@@ -130,6 +130,20 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
   const [bannerRefresh, setBannerRefresh] = useState(0);
   const [optimisticEnabled, setOptimisticEnabled] = useState<Map<number, boolean>>(new Map());
 
+  // Clear stale optimistic values when server data arrives (e.g. after editing in the dialog)
+  useEffect(() => {
+    setOptimisticEnabled((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map<number, boolean>();
+      for (const [id, val] of prev) {
+        const host = hosts.find((h) => h.id === id);
+        // Keep only entries where the server hasn't caught up yet
+        if (host && host.enabled !== val) next.set(id, val);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [hosts]);
+
   const toggleFeatureFilter = (key: L4FeatureKey) => {
     setFeatureFilters((prev) => {
       const next = new Set(prev);

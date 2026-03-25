@@ -26,8 +26,8 @@ export default defineConfig({
       NODE_ENV: 'test',
     },
     include: [
-      resolve(__dirname, 'unit/**/*.test.ts'),
-      resolve(__dirname, 'integration/**/*.test.ts'),
+      'tests/unit/**/*.test.ts',
+      'tests/integration/**/*.test.ts',
     ],
     // Suppress console output from production code during tests (e.g. expected
     // warn/error calls when intentionally feeding bad input to parsers).

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -355,10 +356,11 @@ type TagInputProps = {
   placeholder?: string;
   helperText?: string;
   validate?: (value: string) => boolean;
+  validationMessage?: string;
   uppercase?: boolean;
 };
 
-function TagInput({ name, label, initialValues = [], placeholder, helperText, validate, uppercase = false }: TagInputProps) {
+function TagInput({ name, label, initialValues = [], placeholder, helperText, validate, validationMessage, uppercase = false }: TagInputProps) {
   const [tags, setTags] = useState<string[]>(initialValues);
   const [inputValue, setInputValue] = useState("");
 
@@ -369,7 +371,10 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
   function commitInput(raw: string) {
     const value = processValue(raw);
     if (!value) return;
-    if (validate && !validate(value)) return;
+    if (validate && !validate(value)) {
+      toast.error(validationMessage ?? `Invalid ${label.toLowerCase()} value: ${value}`);
+      return;
+    }
     if (tags.includes(value)) {
       setInputValue("");
       return;
@@ -534,6 +539,7 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
         placeholder="13335, 15169…"
         helperText="Autonomous System Numbers — press Enter or comma to add"
         validate={(v) => /^\d+$/.test(v)}
+        validationMessage="ASN must be a number (e.g. 13335)"
       />
 
       {/* CIDRs + IPs */}
@@ -543,14 +549,18 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
           label="CIDRs"
           initialValues={cidrs}
           placeholder="10.0.0.0/8…"
-          helperText="Press Enter or comma to add"
+          helperText="CIDR notation (must include /mask) — press Enter or comma to add"
+          validate={(v) => /^[0-9a-fA-F.:]+\/\d{1,3}$/.test(v)}
+          validationMessage="CIDRs must include /mask (e.g. 10.0.0.0/8 or ::/0)"
         />
         <TagInput
           name={`geoblock_${prefix}_ips`}
           label="IP Addresses"
           initialValues={ips}
           placeholder="1.2.3.4…"
-          helperText="Press Enter or comma to add"
+          helperText="Single IPs only (no /mask) — press Enter or comma to add"
+          validate={(v) => /^[0-9a-fA-F.:]+$/.test(v) && !v.includes("/")}
+          validationMessage="Enter a single IP address without /mask — use the CIDRs field for ranges"
         />
       </div>
     </div>

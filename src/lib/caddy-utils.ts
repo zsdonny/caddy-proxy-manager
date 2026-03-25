@@ -22,6 +22,37 @@ export function expandPrivateRanges(proxies: string[]): string[] {
   return proxies.flatMap((p) => (p === "private_ranges" ? PRIVATE_RANGES_CIDRS : [p]));
 }
 
+/**
+ * Normalize CIDR and IP lists so that bare IPs accidentally placed in the
+ * CIDR list are moved to the IP list and vice-versa.  This prevents
+ * Caddy config-load failures caused by Go's net.ParseCIDR rejecting bare
+ * IPs (e.g. "::" instead of "::/128").
+ */
+export function normalizeCidrAndIpLists(
+  cidrs: string[],
+  ips: string[],
+): { cidrs: string[]; ips: string[] } {
+  const outCidrs: string[] = [];
+  const outIps = [...ips];
+
+  for (const entry of cidrs) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes("/")) {
+      // Already CIDR notation
+      outCidrs.push(trimmed);
+    } else if (isIP(trimmed)) {
+      // Bare IP in the CIDR list — move to IPs
+      if (!outIps.includes(trimmed)) outIps.push(trimmed);
+    } else {
+      // Keep as-is and let Caddy validate (may be an invalid entry)
+      outCidrs.push(trimmed);
+    }
+  }
+
+  return { cidrs: outCidrs, ips: outIps };
+}
+
 // ---------------------------------------------------------------------------
 // Type helpers
 // ---------------------------------------------------------------------------

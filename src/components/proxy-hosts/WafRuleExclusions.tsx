@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type Props = {
   value?: number[];
@@ -16,7 +17,10 @@ export function WafRuleExclusions({ value }: Props) {
 
   function addId() {
     const n = parseInt(inputVal.trim(), 10);
-    if (!Number.isInteger(n) || n <= 0) return;
+    if (!Number.isInteger(n) || n <= 0) {
+      if (inputVal.trim()) toast.error("Rule ID must be a positive number");
+      return;
+    }
     if (ids.includes(n)) { setInputVal(""); return; }
     setIds((prev) => [...prev, n]);
     setInputVal("");

@@ -153,6 +153,20 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
   const [featureFilters, setFeatureFilters] = useState<Set<ProxyFeatureKey>>(new Set());
   const [optimisticEnabled, setOptimisticEnabled] = useState<Map<number, boolean>>(new Map());
 
+  // Clear stale optimistic values when server data arrives (e.g. after editing in the dialog)
+  useEffect(() => {
+    setOptimisticEnabled((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map<number, boolean>();
+      for (const [id, val] of prev) {
+        const host = hosts.find((h) => h.id === id);
+        // Keep only entries where the server hasn't caught up yet
+        if (host && host.enabled !== val) next.set(id, val);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [hosts]);
+
   const toggleFeatureFilter = (key: ProxyFeatureKey) => {
     setFeatureFilters((prev) => {
       const next = new Set(prev);

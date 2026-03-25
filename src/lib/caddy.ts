@@ -7,6 +7,7 @@ import {
   expandPrivateRanges,
   isPlainObject,
   mergeDeep,
+  normalizeCidrAndIpLists,
   parseJson,
   parseOptionalJson,
   parseCustomHandlers,
@@ -605,14 +606,20 @@ function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> 
   if (config.block_countries?.length) handler.block_countries = config.block_countries;
   if (config.block_continents?.length) handler.block_continents = config.block_continents;
   if (config.block_asns?.length) handler.block_asns = config.block_asns;
-  if (config.block_cidrs?.length) handler.block_cidrs = config.block_cidrs;
-  if (config.block_ips?.length) handler.block_ips = config.block_ips;
+
+  // Normalize: bare IPs in the CIDR field are moved to the IP list to prevent
+  // Caddy config-load failures (Go's net.ParseCIDR rejects bare IPs).
+  const block = normalizeCidrAndIpLists(config.block_cidrs ?? [], config.block_ips ?? []);
+  if (block.cidrs.length) handler.block_cidrs = block.cidrs;
+  if (block.ips.length) handler.block_ips = block.ips;
 
   if (config.allow_countries?.length) handler.allow_countries = config.allow_countries;
   if (config.allow_continents?.length) handler.allow_continents = config.allow_continents;
   if (config.allow_asns?.length) handler.allow_asns = config.allow_asns;
-  if (config.allow_cidrs?.length) handler.allow_cidrs = config.allow_cidrs;
-  if (config.allow_ips?.length) handler.allow_ips = config.allow_ips;
+
+  const allow = normalizeCidrAndIpLists(config.allow_cidrs ?? [], config.allow_ips ?? []);
+  if (allow.cidrs.length) handler.allow_cidrs = allow.cidrs;
+  if (allow.ips.length) handler.allow_ips = allow.ips;
 
   if (config.trusted_proxies?.length) handler.trusted_proxies = expandPrivateRanges(config.trusted_proxies);
   if (config.fail_closed) handler.fail_closed = true;
@@ -1534,7 +1541,7 @@ async function buildL4Servers(
         geoblock: meta.geoblock ?? null,
         geoblock_mode: meta.geoblock_mode ?? "merge",
       });
-      if (effectiveGeoBlock) {
+      if (effectiveGeoBlock?.enabled) {
         const blockerMatcher: Record<string, unknown> = {
           geoip_db: "/usr/share/GeoIP/GeoLite2-Country.mmdb",
           asn_db: "/usr/share/GeoIP/GeoLite2-ASN.mmdb",
@@ -1542,13 +1549,19 @@ async function buildL4Servers(
         if (effectiveGeoBlock.block_countries?.length) blockerMatcher.block_countries = effectiveGeoBlock.block_countries;
         if (effectiveGeoBlock.block_continents?.length) blockerMatcher.block_continents = effectiveGeoBlock.block_continents;
         if (effectiveGeoBlock.block_asns?.length) blockerMatcher.block_asns = effectiveGeoBlock.block_asns;
-        if (effectiveGeoBlock.block_cidrs?.length) blockerMatcher.block_cidrs = effectiveGeoBlock.block_cidrs;
-        if (effectiveGeoBlock.block_ips?.length) blockerMatcher.block_ips = effectiveGeoBlock.block_ips;
+
+        // Normalize: bare IPs in the CIDR field are moved to the IP list
+        const l4Block = normalizeCidrAndIpLists(effectiveGeoBlock.block_cidrs ?? [], effectiveGeoBlock.block_ips ?? []);
+        if (l4Block.cidrs.length) blockerMatcher.block_cidrs = l4Block.cidrs;
+        if (l4Block.ips.length) blockerMatcher.block_ips = l4Block.ips;
+
         if (effectiveGeoBlock.allow_countries?.length) blockerMatcher.allow_countries = effectiveGeoBlock.allow_countries;
         if (effectiveGeoBlock.allow_continents?.length) blockerMatcher.allow_continents = effectiveGeoBlock.allow_continents;
         if (effectiveGeoBlock.allow_asns?.length) blockerMatcher.allow_asns = effectiveGeoBlock.allow_asns;
-        if (effectiveGeoBlock.allow_cidrs?.length) blockerMatcher.allow_cidrs = effectiveGeoBlock.allow_cidrs;
-        if (effectiveGeoBlock.allow_ips?.length) blockerMatcher.allow_ips = effectiveGeoBlock.allow_ips;
+
+        const l4Allow = normalizeCidrAndIpLists(effectiveGeoBlock.allow_cidrs ?? [], effectiveGeoBlock.allow_ips ?? []);
+        if (l4Allow.cidrs.length) blockerMatcher.allow_cidrs = l4Allow.cidrs;
+        if (l4Allow.ips.length) blockerMatcher.allow_ips = l4Allow.ips;
 
         // Build the same route matcher as the proxy route (if any)
         const blockRoute: Record<string, unknown> = {

@@ -14,6 +14,7 @@ import {
   parseUpstreamTarget,
   formatDialAddress,
   toDurationMs,
+  normalizeCidrAndIpLists,
 } from '@/src/lib/caddy-utils';
 
 // ---------------------------------------------------------------------------
@@ -379,5 +380,71 @@ describe('toDurationMs', () => {
 
   it('returns null for zero-duration', () => {
     expect(toDurationMs('0s')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeCidrAndIpLists
+// ---------------------------------------------------------------------------
+
+describe('normalizeCidrAndIpLists', () => {
+  it('leaves valid CIDRs in the cidrs list', () => {
+    const result = normalizeCidrAndIpLists(['10.0.0.0/8', '192.168.0.0/16'], []);
+    expect(result.cidrs).toEqual(['10.0.0.0/8', '192.168.0.0/16']);
+    expect(result.ips).toEqual([]);
+  });
+
+  it('moves bare IPv4 from cidrs to ips', () => {
+    const result = normalizeCidrAndIpLists(['10.0.0.0/8', '1.2.3.4'], []);
+    expect(result.cidrs).toEqual(['10.0.0.0/8']);
+    expect(result.ips).toEqual(['1.2.3.4']);
+  });
+
+  it('moves bare IPv6 :: from cidrs to ips', () => {
+    const result = normalizeCidrAndIpLists(['0.0.0.0/0', '::'], []);
+    expect(result.cidrs).toEqual(['0.0.0.0/0']);
+    expect(result.ips).toEqual(['::']);
+  });
+
+  it('moves bare IPv6 ::1 from cidrs to ips', () => {
+    const result = normalizeCidrAndIpLists(['::1'], ['10.0.0.1']);
+    expect(result.cidrs).toEqual([]);
+    expect(result.ips).toEqual(['10.0.0.1', '::1']);
+  });
+
+  it('does not duplicate IPs already in the ips list', () => {
+    const result = normalizeCidrAndIpLists(['1.2.3.4'], ['1.2.3.4']);
+    expect(result.cidrs).toEqual([]);
+    expect(result.ips).toEqual(['1.2.3.4']);
+  });
+
+  it('keeps IPv6 CIDRs in cidrs', () => {
+    const result = normalizeCidrAndIpLists(['::/0', 'fd00::/8'], []);
+    expect(result.cidrs).toEqual(['::/0', 'fd00::/8']);
+    expect(result.ips).toEqual([]);
+  });
+
+  it('handles empty inputs', () => {
+    const result = normalizeCidrAndIpLists([], []);
+    expect(result.cidrs).toEqual([]);
+    expect(result.ips).toEqual([]);
+  });
+
+  it('trims whitespace from entries', () => {
+    const result = normalizeCidrAndIpLists([' 10.0.0.0/8 ', ' 1.2.3.4 '], []);
+    expect(result.cidrs).toEqual(['10.0.0.0/8']);
+    expect(result.ips).toEqual(['1.2.3.4']);
+  });
+
+  it('skips empty strings', () => {
+    const result = normalizeCidrAndIpLists(['', '  ', '10.0.0.0/8'], []);
+    expect(result.cidrs).toEqual(['10.0.0.0/8']);
+    expect(result.ips).toEqual([]);
+  });
+
+  it('keeps non-IP non-CIDR strings as CIDRs (let Caddy validate)', () => {
+    const result = normalizeCidrAndIpLists(['invalid-entry'], []);
+    expect(result.cidrs).toEqual(['invalid-entry']);
+    expect(result.ips).toEqual([]);
   });
 });
