@@ -1,0 +1,78 @@
+{/* Introduction.mdx */}
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction" />
+
+# Caddy Proxy Manager Plus — Component Stories
+
+A living demo of every interactive UI component in Caddy Proxy Manager Plus.
+Each story uses real component code with mocked API responses — nothing is faked at the render layer.
+
+---
+
+## How stories are organized
+
+<table>
+  <thead>
+    <tr><th>Folder</th><th>Purpose</th><th>Autodocs</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Components/</strong></td><td>Isolated component stories — lightweight decorator (theme + tooltip only)</td><td>Yes</td></tr>
+    <tr><td><strong>Pages/</strong></td><td>Full page showcase — wrapped in the dashboard shell (sidebar, header, nav)</td><td>No</td></tr>
+  </tbody>
+</table>
+
+### Components
+
+<table>
+  <thead>
+    <tr><th>Story</th><th>What it demos</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>L4PortsApplyBanner</strong></td><td>Yellow → spinner → green alert lifecycle for Docker port changes</td></tr>
+    <tr><td><strong>ConnectionMonitor</strong></td><td>Reconnect overlay — unexpected disconnect and expected Caddy restart</td></tr>
+    <tr><td><strong>CertificatesClient</strong></td><td>Tab-based cert management: ACME auto-HTTPS, imported certs, built-in CA + mTLS client certs, expiry status chips</td></tr>
+    <tr><td><strong>WafEventsClient</strong></td><td>WAF event log with severity/blocked chips, rule suppression, per-host and global exclusions</td></tr>
+    <tr><td><strong>AccessListsClient</strong></td><td>HTTP basic auth credential cards with cycling accent colors, user management</td></tr>
+    <tr><td><strong>AuditLogClient</strong></td><td>Searchable configuration change history with user attribution badges</td></tr>
+  </tbody>
+</table>
+
+### Pages
+
+<table>
+  <thead>
+    <tr><th>Story</th><th>What it demos</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Overview</strong></td><td>Dashboard home — stat cards, traffic summary, recent activity feed</td></tr>
+    <tr><td><strong>Proxy Hosts</strong></td><td>HTTP/HTTPS proxy table — WAF, mTLS, GeoBlock, Authentik, load-balancer badges</td></tr>
+    <tr><td><strong>L4 Proxy Hosts</strong></td><td>TCP/UDP L4 proxy table — TLS SNI, load-balance, GeoBlock, ProxyProto badges</td></tr>
+    <tr><td><strong>L4 Apply Banner</strong></td><td>Port-change apply banner embedded in the dashboard shell</td></tr>
+    <tr><td><strong>Connection Monitor</strong></td><td>Full-screen reconnect overlay in dashboard context</td></tr>
+    <tr><td><strong>Certificates</strong></td><td>SSL/TLS cert management page — ACME, imported, and CA/mTLS tabs in full layout</td></tr>
+    <tr><td><strong>WAF Events</strong></td><td>Web Application Firewall event log with rule suppression in full layout</td></tr>
+    <tr><td><strong>Access Lists</strong></td><td>HTTP basic auth access list management in full layout</td></tr>
+    <tr><td><strong>Audit Log</strong></td><td>Configuration change history in full layout</td></tr>
+  </tbody>
+</table>
+
+---
+
+## How mocking works
+
+Stories replace `window.fetch` via Storybook's `beforeEach` hook (runs synchronously before render, guaranteeing the mock is in place before any `useEffect` fires).
+
+`"use server"` action files are replaced at the Vite transform layer with no-op stubs, so `node:fs`, `better-sqlite3`, and `next/server` never enter the browser bundle.
+
+---
+
+## Interactive stories
+
+Stories marked **▶ Interactive** are driven by a `play` function — click the **Interactions** tab at the bottom to watch the step-by-step replay.
+
+---
+
+## Dark / Light mode
+
+Use the **contrast toolbar button** (**&#9681;**) at the top of the page to toggle between light and dark mode. The toggle is wired to Tailwind's `dark` class so every CSS variable flips correctly.
