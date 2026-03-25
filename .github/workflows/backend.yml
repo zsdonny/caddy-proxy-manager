@@ -30,3 +30,19 @@ jobs:
 
       - name: Run unit and integration tests
         run: bun run test
+
+  backup-ref:
+    name: Backup develop ref
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Update rolling backup tag
+        run: |
+          git tag -f backup/develop
+          git push origin backup/develop --force
