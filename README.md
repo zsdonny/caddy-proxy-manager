@@ -17,7 +17,7 @@
 
 ## Changes from Upstream
 
-**Last upstream sync:** 2026-03-24 — rebased onto upstream/develop; picked up Tailwind CSS v4 upgrade, feature badges (superseded by fork), and README trim.
+**Last upstream sync:** 2026-03-25 — merged upstream/develop (ours strategy); upstream added l4-port-manager to shared Docker CI matrix — superseded by fork's dedicated `docker-build-l4-port-manager.yml` workflow and composeless direct mode.
 
 | Change | Description | Status |
 |--------|-------------|--------|
