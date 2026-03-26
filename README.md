@@ -17,7 +17,7 @@
 
 ## Changes from Upstream
 
-**Last upstream sync:** 2026-03-25 — merged upstream/develop (ours strategy); upstream added l4-port-manager to shared Docker CI matrix — superseded by fork's dedicated `docker-build-l4-port-manager.yml` workflow and composeless direct mode.
+**Last upstream sync:** 2026-03-26 — applied package updates from upstream 937e70d; merged upstream/develop (ours strategy) to resolve rewritten history divergence and skip 0acb430 (readme ports change not applicable to fork).
 
 | Change | Description | Status |
 |--------|-------------|--------|
