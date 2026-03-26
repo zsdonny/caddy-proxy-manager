@@ -140,7 +140,7 @@ function DesktopTable<T>({
                 style={{ width: col.width }}
                 className={[
                   col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "",
-                  col.sticky ? "sticky right-0 bg-card after:absolute after:inset-y-0 after:-left-px after:w-px after:bg-border" : "",
+                  col.sticky ? "sticky right-0 bg-card" : "",
                 ].filter(Boolean).join(" ")}
               >
                 <SortableHeader col={col as Column<unknown>} sort={sort} />
@@ -171,6 +171,7 @@ function DesktopTable<T>({
                 key={String(row[keyField])}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={[
+                  "group",
                   onRowClick ? "cursor-pointer hover:bg-muted/50" : "",
                   rowClassName ? rowClassName(row) : "",
                 ].filter(Boolean).join(" ")}
@@ -180,7 +181,7 @@ function DesktopTable<T>({
                     key={col.id}
                     className={[
                       col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "",
-                      col.sticky ? "sticky right-0 bg-card after:absolute after:inset-y-0 after:-left-px after:w-px after:bg-border" : "",
+                      col.sticky ? "sticky right-0 bg-card group-hover:bg-muted/50 transition-colors" : "",
                     ].filter(Boolean).join(" ")}
                   >
                     {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
