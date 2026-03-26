@@ -22,9 +22,11 @@
 | Change | Description | Status |
 |--------|-------------|--------|
 | **Composeless l4-port-manager** | The `l4-port-manager` sidecar can recreate the Caddy container using the Docker Engine API directly, without a bind-mounted `docker-compose.yml` | Fork-exclusive |
-| **Pre-built Docker images** | Fork images published to GHCR: `ghcr.io/zsdonny/caddy-proxy-manager-plus-web:latest` and `ghcr.io/zsdonny/caddy-proxy-manager-plus-caddy:latest` | Fork-exclusive |
-| **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads | Fork-exclusive |
+| **Pre-built Docker images** | Multi-arch (amd64/arm64) images published to GHCR with separate build workflows for web, Caddy, and l4-port-manager | Fork-exclusive |
+| **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads instead of container recreations | Fork-exclusive |
 | **L4 feature parity** | Full mTLS, Geo Blocking, and Upstream TLS dial support for L4 proxy hosts — matching HTTP proxy capabilities with shared components and server-side certificate validation | Fork-exclusive |
+| **WAF event management** | Per-rule suppression UI (global + per-host) from the event drawer; custom SecLang directive validation with real-time error reporting; audit log truncation to prevent unbounded disk growth | Fork-exclusive |
+| **ACME certificate cache** | TLS probe-based certificate metadata (issuer, validity, SANs) stored in a DB cache — instant cert page loads with no filesystem scanning | Fork-exclusive |
 | **UI polish & consistency** | Optimistic toggles, submit spinners, deferred config reloads; toggle-panel pattern (no dual chevron+toggle); aligned badge variants, filter icons, and mobile cards between HTTP and L4; dynamic TLS warning text | Fork-exclusive |
 | **Interactive Storybook** | Component and page interaction tests via `@storybook/addon-vitest`; deployed to GitHub Pages on every successful CI run | Fork-exclusive |
 
