@@ -61,6 +61,18 @@ describe('buildWafHandler — without OWASP CRS', () => {
     // The directives string should end with the last standard directive
     expect((handler.directives as string).trimEnd()).not.toMatch(/\s+$/);
   });
+
+  it('strips Include @coraza.conf-recommended from custom_directives', () => {
+    const custom = 'Include @coraza.conf-recommended\nSecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog"';
+    const handler = buildWafHandler({ ...baseWaf, custom_directives: custom });
+    expect(handler.directives).not.toContain('@coraza.conf-recommended');
+    expect(handler.directives).toContain('@ipMatch 1.2.3.4');
+  });
+
+  it('strips Include @coraza.conf-recommended even with leading whitespace', () => {
+    const handler = buildWafHandler({ ...baseWaf, custom_directives: '  Include @coraza.conf-recommended  ' });
+    expect(handler.directives).not.toContain('@coraza.conf-recommended');
+  });
 });
 
 // ---------------------------------------------------------------------------

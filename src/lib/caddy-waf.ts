@@ -141,7 +141,15 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
   );
 
   if (waf.custom_directives?.trim()) {
-    parts.push(waf.custom_directives.trim());
+    // Strip Include @coraza.conf-recommended — that file contains directives
+    // Coraza's Go parser does not implement (SecTmpSaveUploadedFiles, etc.)
+    // and may be present in the DB from older versions.
+    const sanitized = waf.custom_directives
+      .split('\n')
+      .filter(l => !/^\s*Include\s+@coraza\.conf-recommended\b/i.test(l))
+      .join('\n')
+      .trim();
+    if (sanitized) parts.push(sanitized);
   }
 
   const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };
