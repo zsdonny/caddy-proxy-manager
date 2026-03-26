@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync, truncateSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
@@ -238,6 +238,40 @@ async function purgeOldEntries(): Promise<void> {
   const days = retention?.wafRetentionDays ?? DEFAULT_RETENTION_DAYS;
   const cutoff = Math.floor(now / 1000) - days * 86400;
   db.run(`DELETE FROM waf_events WHERE ts < ${cutoff}`);
+  truncateAuditLog();
+}
+
+/**
+ * Truncate the Coraza audit log file after all content has been parsed.
+ *
+ * Unlike the waf-rules.log (which has Caddy-native rotation via roll_size_mb),
+ * waf-audit.log is written directly by Coraza's SecAuditLog and has no built-in
+ * rotation.  Since the parser ingests every line into the database (where the
+ * retention setting controls how long rows are kept), the file is just a transport
+ * buffer.  Truncating it hourly prevents unbounded disk growth.
+ *
+ * Safety:
+ *  - Only truncates when storedOffset >= currentSize (all content consumed).
+ *  - Coraza opens the file with O_APPEND; after truncation to 0 bytes the next
+ *    write resumes at offset 0 (standard Unix copytruncate semantics).
+ *  - The parser already handles file-size decreases (resets offset to 0), so the
+ *    next parse cycle works correctly after truncation.
+ */
+function truncateAuditLog(): void {
+  try {
+    if (!existsSync(AUDIT_LOG)) return;
+    const storedOffset = parseInt(getState('waf_audit_log_offset') ?? '0', 10);
+    const currentSize = statSync(AUDIT_LOG).size;
+    // Only truncate when the parser has consumed all content
+    if (currentSize > 0 && storedOffset >= currentSize) {
+      truncateSync(AUDIT_LOG, 0);
+      setState('waf_audit_log_offset', '0');
+      setState('waf_audit_log_size', '0');
+      console.log(`[waf-log-parser] truncated ${AUDIT_LOG} (was ${currentSize} bytes)`);
+    }
+  } catch {
+    // Non-fatal: file may be locked or permissions insufficient in edge cases
+  }
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
