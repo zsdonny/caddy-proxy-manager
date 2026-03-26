@@ -140,7 +140,7 @@ export const TypeUnsupportedDirective: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const textarea = canvas.getByRole('textbox');
+    const textarea = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
     await userEvent.type(textarea, 'SecTmpDir /tmp/modsec');
 
     await waitFor(() => {
@@ -164,7 +164,7 @@ export const TypeManagedDirective: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const textarea = canvas.getByRole('textbox');
+    const textarea = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
     await userEvent.type(textarea, 'SecRuleEngine On');
 
     await waitFor(() => {
@@ -188,7 +188,7 @@ export const TypeValidDirective: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const textarea = canvas.getByRole('textbox');
+    const textarea = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
     await userEvent.type(
       textarea,
       'SecRule REQUEST_URI "@contains /api" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"'
