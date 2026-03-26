@@ -11,6 +11,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** Scope queries to the visible (active) Block Rules tab panel. */
+function activeTabPanel(canvasElement: HTMLElement) {
+  const panel = canvasElement.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]');
+  if (!panel) throw new Error('No active tab panel found');
+  return within(panel);
+}
+
 // ── Meta ──────────────────────────────────────────────────────────────────────
 
 const meta: Meta<typeof GeoBlockFields> = {
@@ -114,7 +121,7 @@ export const RejectsBareIpInCidrField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = activeTabPanel(canvasElement);
 
     // Find the CIDRs input by its placeholder
     const cidrInput = await canvas.findByPlaceholderText('10.0.0.0/8…');
@@ -157,7 +164,7 @@ export const RejectsIpv6BareInCidrField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = activeTabPanel(canvasElement);
 
     const cidrInput = await canvas.findByPlaceholderText('10.0.0.0/8…');
     await userEvent.clear(cidrInput);
@@ -190,7 +197,7 @@ export const AcceptsValidCidr: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = activeTabPanel(canvasElement);
 
     const cidrInput = await canvas.findByPlaceholderText('10.0.0.0/8…');
     await userEvent.clear(cidrInput);
@@ -224,7 +231,7 @@ export const RejectsInvalidAsn: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = activeTabPanel(canvasElement);
 
     const asnInput = await canvas.findByPlaceholderText('13335, 15169…');
     await userEvent.clear(asnInput);
@@ -257,7 +264,7 @@ export const RejectsCidrInIpField: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = activeTabPanel(canvasElement);
 
     const ipInput = await canvas.findByPlaceholderText('1.2.3.4…');
     await userEvent.clear(ipInput);
