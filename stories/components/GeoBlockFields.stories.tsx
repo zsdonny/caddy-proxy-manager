@@ -275,3 +275,136 @@ export const RejectsCidrInIpField: Story = {
     );
   },
 };
+
+export const DisabledWithData: Story = {
+  name: 'Disabled — settings preserved',
+  args: {
+    initialValues: {
+      geoblock: {
+        enabled: false,
+        block_countries: ['CN', 'RU'],
+        block_continents: ['AS'],
+        block_asns: [13335],
+        block_cidrs: ['192.168.1.0/24'],
+        block_ips: ['1.2.3.4'],
+        allow_countries: ['US'],
+        allow_continents: [],
+        allow_asns: [],
+        allow_cidrs: ['10.0.0.0/8'],
+        allow_ips: [],
+      },
+      geoblock_mode: 'override',
+    },
+  },
+};
+
+export const ToggleOffOnPreservesCidrs: Story = {
+  name: '▶ Toggle off → on preserves CIDRs & countries',
+  args: {
+    initialValues: {
+      geoblock: {
+        enabled: true,
+        block_countries: ['CN'],
+        block_continents: [],
+        block_asns: [],
+        block_cidrs: ['192.168.1.0/24'],
+        block_ips: [],
+        allow_countries: [],
+        allow_continents: [],
+        allow_asns: [],
+        allow_cidrs: [],
+        allow_ips: [],
+      },
+      geoblock_mode: 'merge',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch');
+
+    // Verify CIDR tag is visible while enabled
+    const panel = activeTabPanel(canvasElement);
+    expect(panel.getByText('192.168.1.0/24')).toBeTruthy();
+
+    // Toggle OFF
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+
+    // Toggle back ON
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    // CIDR tag should still be there
+    const panelAfter = activeTabPanel(canvasElement);
+    expect(panelAfter.getByText('192.168.1.0/24')).toBeTruthy();
+
+    // Country hidden input should still carry CN
+    const hiddenInput = canvasElement.querySelector<HTMLInputElement>(
+      'input[name="geoblock_block_countries"]'
+    );
+    expect(hiddenInput?.value).toContain('CN');
+  },
+};
+
+export const ToggleOffOnPreservesCustomResponse: Story = {
+  name: '▶ Toggle off → on preserves response body',
+  args: {
+    initialValues: {
+      geoblock: {
+        enabled: true,
+        block_countries: [],
+        block_continents: [],
+        block_asns: [],
+        block_cidrs: [],
+        block_ips: [],
+        allow_countries: [],
+        allow_continents: [],
+        allow_asns: [],
+        allow_cidrs: [],
+        allow_ips: [],
+        response_status: 451,
+        response_body: 'Access denied from your region.',
+      },
+      geoblock_mode: 'merge',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch');
+
+    // Open the nested "Trusted Proxies & Block Response" accordion
+    const advancedTrigger = canvas.getByText('Trusted Proxies & Block Response');
+    await userEvent.click(advancedTrigger);
+
+    // Verify initial values are present
+    await waitFor(() => {
+      const statusInput = canvasElement.querySelector<HTMLInputElement>(
+        'input[name="geoblock_response_status"]'
+      );
+      expect(statusInput?.value).toBe('451');
+    });
+
+    // Toggle OFF then ON
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    // Re-open accordion (may have stayed open via CSS-only collapse)
+    const advancedTriggerAfter = canvas.getByText('Trusted Proxies & Block Response');
+    await userEvent.click(advancedTriggerAfter);
+
+    // Values should persist after toggle cycle
+    await waitFor(() => {
+      const statusInput = canvasElement.querySelector<HTMLInputElement>(
+        'input[name="geoblock_response_status"]'
+      );
+      expect(statusInput?.value).toBe('451');
+
+      const bodyInput = canvasElement.querySelector<HTMLInputElement>(
+        'input[name="geoblock_response_body"]'
+      );
+      expect(bodyInput?.value).toBe('Access denied from your region.');
+    });
+  },
+};

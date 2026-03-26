@@ -201,3 +201,98 @@ export const TypeValidDirective: Story = {
     });
   },
 };
+
+export const DisabledWithData: Story = {
+  name: 'Disabled — settings preserved',
+  args: {
+    value: {
+      enabled: false,
+      mode: 'On',
+      load_owasp_crs: false,
+      waf_mode: 'override',
+      custom_directives:
+        'SecRule REMOTE_ADDR "@ipMatch 10.0.0.0/8" "id:9000,phase:1,allow,nolog"',
+      excluded_rule_ids: [941100, 942100],
+    },
+  },
+};
+
+export const ToggleOffOnPreservesDirectives: Story = {
+  name: '▶ Toggle off → on preserves custom directives',
+  args: {
+    value: {
+      enabled: true,
+      mode: 'On',
+      load_owasp_crs: true,
+      waf_mode: 'merge',
+      custom_directives:
+        'SecRule REMOTE_ADDR "@ipMatch 10.0.0.0/8" "id:9000,phase:1,allow,nolog"',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch');
+
+    // Verify directives visible while enabled
+    const textarea = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
+    expect(textarea).toHaveValue(
+      'SecRule REMOTE_ADDR "@ipMatch 10.0.0.0/8" "id:9000,phase:1,allow,nolog"'
+    );
+
+    // Toggle OFF
+    await userEvent.click(toggle);
+    await waitFor(() => {
+      // Content area should be collapsed
+      expect(toggle).not.toBeChecked();
+    });
+
+    // Toggle back ON
+    await userEvent.click(toggle);
+    await waitFor(() => {
+      expect(toggle).toBeChecked();
+    });
+
+    // Directives should still be there
+    const textareaAfter = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
+    expect(textareaAfter).toHaveValue(
+      'SecRule REMOTE_ADDR "@ipMatch 10.0.0.0/8" "id:9000,phase:1,allow,nolog"'
+    );
+  },
+};
+
+export const ToggleOffOnPreservesEngineMode: Story = {
+  name: '▶ Toggle off → on preserves engine mode & CRS',
+  args: {
+    value: {
+      enabled: true,
+      mode: 'Off',
+      load_owasp_crs: false,
+      waf_mode: 'override',
+      custom_directives: '',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch');
+
+    // Verify "Override global" mode card is selected (has a distinctive border)
+    const overrideCard = canvas.getByText('Override global');
+    expect(overrideCard.closest('[class*="border-destructive"]')).toBeTruthy();
+
+    // Toggle OFF then back ON
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    // Hidden inputs should still carry the persisted values
+    const modeInput = canvasElement.querySelector<HTMLInputElement>('input[name="waf_engine_mode"]');
+    expect(modeInput?.value).toBe('Off');
+
+    const crsInput = canvasElement.querySelector<HTMLInputElement>('input[name="waf_load_owasp_crs"]');
+    expect(crsInput?.value).toBe('');
+
+    const wafModeInput = canvasElement.querySelector<HTMLInputElement>('input[name="waf_mode"]');
+    expect(wafModeInput?.value).toBe('override');
+  },
+};
