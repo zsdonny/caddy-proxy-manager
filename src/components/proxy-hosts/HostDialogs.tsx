@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormState } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
     createProxyHostAction,
@@ -48,6 +48,7 @@ export function CreateHostDialog({
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
+    const errorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -56,6 +57,7 @@ export function CreateHostDialog({
             onClose();
         } else if (state.status === "error") {
             setIsPending(false);
+            errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }, [state.status, state.message, onClose]);
 
@@ -74,7 +76,7 @@ export function CreateHostDialog({
         >
             <form id="create-host-form" action={formAction} className="flex flex-col gap-5">
                 {state.status !== "idle" && state.message && (
-                    <Alert variant={state.status === "error" ? "destructive" : "default"}>
+                    <Alert ref={errorRef} variant={state.status === "error" ? "destructive" : "default"}>
                         <AlertDescription>{state.message}</AlertDescription>
                     </Alert>
                 )}
@@ -198,6 +200,7 @@ export function EditHostDialog({
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
+    const errorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -206,6 +209,7 @@ export function EditHostDialog({
             onClose();
         } else if (state.status === "error") {
             setIsPending(false);
+            errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }, [state.status, state.message, onClose]);
 
@@ -224,7 +228,7 @@ export function EditHostDialog({
         >
             <form id="edit-host-form" action={formAction} className="flex flex-col gap-5">
                 {state.status !== "idle" && state.message && (
-                    <Alert variant={state.status === "error" ? "destructive" : "default"}>
+                    <Alert ref={errorRef} variant={state.status === "error" ? "destructive" : "default"}>
                         <AlertDescription>{state.message}</AlertDescription>
                     </Alert>
                 )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormState } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   createL4ProxyHostAction,
@@ -86,6 +86,7 @@ function L4HostForm({
   const [dnsEnabled, setDnsEnabled] = useState(initialData?.dns_resolver?.enabled ?? false);
   const [selectedCertId, setSelectedCertId] = useState<string>(String(initialData?.certificate_id ?? "__none__"));
   const hasExplicitCert = selectedCertId !== "__none__";
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const defaultUpstreamDnsAccordion =
     initialData?.upstream_dns_resolution?.enabled === true
@@ -102,10 +103,17 @@ function L4HostForm({
     }
   }, [isUdp, matcherType]);
 
+  // Scroll to error alert when validation fails
+  useEffect(() => {
+    if (state.status === "error") {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [state.status, state.message]);
+
   return (
     <form id={formId} action={formAction} className="flex flex-col gap-5">
       {state.status !== "idle" && state.message && (
-        <Alert variant={state.status === "error" ? "destructive" : "default"}>
+        <Alert ref={errorRef} variant={state.status === "error" ? "destructive" : "default"}>
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       )}
