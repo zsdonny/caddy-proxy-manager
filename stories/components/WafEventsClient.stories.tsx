@@ -168,3 +168,27 @@ export const Empty: Story = {
     globalWaf: null,
   },
 };
+
+export const SecLangErrors: Story = {
+  name: 'Global WAF — SecLang validation errors',
+  args: {
+    events: mockEvents.slice(0, 2),
+    pagination: { total: 2, page: 1, perPage: 10 },
+    initialSearch: '',
+    globalExcluded: [],
+    globalExcludedMessages: {},
+    globalWafEnabled: true,
+    hostWafMap: {},
+    globalWaf: {
+      enabled: true,
+      enableOwasp: true,
+      customDirectives: [
+        'SecTmpDir /tmp/modsec',
+        'SecRuleEngine On',
+        'SecRule REQUEST_URI "@contains /ok" "id:9001,allow,nolog"',
+        'Include @coraza.conf-recommended',
+      ].join('\n'),
+      excludedRules: [],
+    },
+  },
+};
