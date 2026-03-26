@@ -23,6 +23,8 @@ export type Column<T> = {
   sortKey?: string;
   render?: (row: T) => ReactNode;
   headerContent?: ReactNode;
+  /** Pin column to the right edge of the scrollable table */
+  sticky?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -134,7 +136,10 @@ function DesktopTable<T>({
               <TableHead
                 key={col.id}
                 style={{ width: col.width }}
-                className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+                className={[
+                  col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "",
+                  col.sticky ? "sticky right-0 bg-card after:absolute after:inset-y-0 after:-left-px after:w-px after:bg-border" : "",
+                ].filter(Boolean).join(" ")}
               >
                 <SortableHeader col={col as Column<unknown>} sort={sort} />
               </TableHead>
@@ -171,7 +176,10 @@ function DesktopTable<T>({
                 {columns.map((col) => (
                   <TableCell
                     key={col.id}
-                    className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+                    className={[
+                      col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "",
+                      col.sticky ? "sticky right-0 bg-card after:absolute after:inset-y-0 after:-left-px after:w-px after:bg-border" : "",
+                    ].filter(Boolean).join(" ")}
                   >
                     {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
                   </TableCell>

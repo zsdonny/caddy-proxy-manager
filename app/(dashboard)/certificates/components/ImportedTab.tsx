@@ -189,6 +189,7 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
       id: "actions",
       label: "",
       align: "right" as const,
+      sticky: true,
       render: (c: ImportedCertView) => (
         <ActionsMenu cert={c} onEdit={() => setDrawerCert(c)} />
       ),
@@ -261,6 +262,7 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       id: "actions",
       label: "",
       align: "right" as const,
+      sticky: true,
       render: (c: ManagedCertView) => (
         <Button
           size="sm"

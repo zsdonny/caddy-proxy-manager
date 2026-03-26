@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
+import { within, userEvent, expect } from 'storybook/test';
 import type { ProxyHost } from '../../src/lib/models/proxy-hosts';
 import ProxyHostsClient from '../../app/(dashboard)/proxy-hosts/ProxyHostsClient';
 import { withDashboardLayout } from '../decorators';
@@ -255,5 +256,42 @@ export const Default: Story = {
     pagination: { total: 6, page: 1, perPage: 25 },
     initialSearch: '',
     initialSort: { sortBy: 'name', sortDir: 'asc' },
+  },
+};
+
+/**
+ * Verifies the sticky actions column is reachable at narrow desktop widths
+ * (768–1000 px) where the table overflows horizontally.
+ */
+export const StickyActionsNarrow: Story = {
+  name: '▶ Sticky actions — narrow desktop',
+  args: {
+    ...Default.args,
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ maxWidth: 800, margin: '0 auto', overflow: 'hidden' }}>
+        <Story />
+      </div>
+    ),
+    withDashboardLayout,
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The actions menu buttons should be visible and clickable even at 800px
+    const menuButtons = canvas.getAllByRole('button', { name: /open menu/i });
+    expect(menuButtons.length).toBeGreaterThan(0);
+
+    // Click the first "..." menu — it should open the dropdown
+    await userEvent.click(menuButtons[0]);
+
+    // Radix DropdownMenu portals to document.body, not inside canvasElement
+    const body = within(document.body);
+    const editItem = await body.findByRole('menuitem', { name: /edit/i });
+    expect(editItem).toBeTruthy();
+
+    // Close by pressing Escape
+    await userEvent.keyboard('{Escape}');
   },
 };

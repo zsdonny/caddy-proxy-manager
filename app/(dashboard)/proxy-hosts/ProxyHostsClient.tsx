@@ -332,6 +332,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       label: "",
       align: "right" as const,
       width: 80,
+      sticky: true,
       render: (host: ProxyHost) => (
         <div className="flex items-center gap-2 justify-end">
           <Switch

@@ -315,6 +315,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
       label: "",
       align: "right" as const,
       width: 80,
+      sticky: true,
       render: (host: L4ProxyHost) => (
         <div className="flex items-center gap-2 justify-end">
           <Switch
