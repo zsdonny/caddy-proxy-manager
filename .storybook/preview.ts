@@ -27,9 +27,13 @@ const preview: Preview = {
     docs: {
       theme: themes.dark,
       container: (props: Record<string, unknown>) => {
-        const globals = (props.context as { store: { globals: { globals: { theme?: string } } } })
-          .store.globals.globals;
-        const docsTheme = globals.theme === 'light' ? themes.light : themes.dark;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ctx = props.context as any;
+        const theme = ctx?.store?.globals?.globals?.theme
+          ?? ctx?.store?.userGlobals?.globals?.theme
+          ?? ctx?.globals?.theme
+          ?? 'dark';
+        const docsTheme = theme === 'light' ? themes.light : themes.dark;
         return React.createElement(DocsContainer, { ...props, theme: docsTheme });
       },
     },
