@@ -101,3 +101,18 @@ export const Interactive: StoryObj = {
   },
   render: () => <InteractiveApplyBanner />,
 };
+
+export const Applying: StoryObj = {
+  name: 'Applying — spinner visible',
+  beforeEach: () => {
+    const cleanupEvents = suppressCaddyEvents();
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve(json({
+      diff: { currentPorts: [':25565/tcp'], requiredPorts: [':25565/tcp', ':5353/udp'], needsApply: true },
+      status: { state: 'applying', message: 'Recreating caddy container…' },
+      networkMode: 'bridge',
+    }));
+    return () => { window.fetch = orig; cleanupEvents(); };
+  },
+  render: () => <L4PortsApplyBanner />,
+};

@@ -150,7 +150,7 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
     ) : effectiveState === "failed" ? (
       <XCircle className="h-4 w-4 text-destructive" />
     ) : isSpinning ? (
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
     ) : null;
 
   return (
@@ -205,7 +205,7 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
           className="shrink-0 ml-auto"
         >
           {applying ? (
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1.5" />
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1.5" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
           )}
