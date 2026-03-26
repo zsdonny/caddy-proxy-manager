@@ -10,7 +10,7 @@
  *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
  */
 import { describe, it, expect } from 'vitest';
-import { buildWafHandler, resolveEffectiveWaf } from '../../src/lib/caddy-waf';
+import { buildWafHandler, resolveEffectiveWaf, validateSecLangDirectives } from '../../src/lib/caddy-waf';
 
 const baseWaf = {
   enabled: true,
@@ -340,5 +340,109 @@ describe('buildWafHandler — WebSocket bypass (regression: silent WAF block on 
     }, true);
     expect(handler.directives).toContain('ctl:ruleEngine=off');
     expect(handler.directives).toContain('SecRule ARGS "@contains evil"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateSecLangDirectives
+// ---------------------------------------------------------------------------
+
+describe('validateSecLangDirectives', () => {
+  it('returns empty array for empty input', () => {
+    expect(validateSecLangDirectives('')).toEqual([]);
+    expect(validateSecLangDirectives('   ')).toEqual([]);
+  });
+
+  it('returns no issues for valid custom rules', () => {
+    const text = [
+      'SecRule ARGS "@contains evil" "id:9001,deny"',
+      'SecRuleRemoveByTag "attack-xss"',
+      'SecRuleRemoveById 920440',
+    ].join('\n');
+    expect(validateSecLangDirectives(text)).toEqual([]);
+  });
+
+  it('skips comment lines and blank lines', () => {
+    const text = [
+      '# This is a comment',
+      '',
+      '   # Another comment',
+      'SecRule ARGS "@contains test" "id:9010,deny"',
+    ].join('\n');
+    expect(validateSecLangDirectives(text)).toEqual([]);
+  });
+
+  it('returns error for unsupported directives', () => {
+    const cases = [
+      'SecTmpDir /tmp',
+      'SecDataDir /tmp',
+      'SecUploadDir /tmp',
+      'SecTmpSaveUploadedFiles On',
+      'SecUnicodeMapFile unicode.mapping 20127',
+      'SecAuditLogType Serial',
+      'SecDebugLog /var/log/debug.log',
+      'SecDebugLogLevel 9',
+      'SecCookieFormat 0',
+      'SecArgumentSeparator &',
+      'SecServerSignature "Apache"',
+      'SecHashEngine On',
+      'SecEncryptionKey "mykey"',
+    ];
+    for (const directive of cases) {
+      const issues = validateSecLangDirectives(directive);
+      expect(issues.length).toBeGreaterThanOrEqual(1);
+      expect(issues[0].severity).toBe('error');
+    }
+  });
+
+  it('returns error for Include @coraza.conf-recommended', () => {
+    const issues = validateSecLangDirectives('Include @coraza.conf-recommended');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].directive).toBe('Include @coraza.conf-recommended');
+  });
+
+  it('returns warning for managed directives', () => {
+    const cases = [
+      'SecRuleEngine On',
+      'SecRequestBodyAccess On',
+      'SecRequestBodyLimit 13107200',
+      'SecResponseBodyAccess Off',
+      'SecAuditEngine RelevantOnly',
+      'SecAuditLog /var/log/audit.log',
+      'SecAuditLogFormat JSON',
+      'SecAuditLogParts ABIJDEFHZ',
+    ];
+    for (const directive of cases) {
+      const issues = validateSecLangDirectives(directive);
+      expect(issues.length).toBeGreaterThanOrEqual(1);
+      expect(issues[0].severity).toBe('warning');
+    }
+  });
+
+  it('reports correct line numbers in mixed content', () => {
+    const text = [
+      '# comment',
+      'SecRule ARGS "@contains test" "id:9010,deny"',
+      'SecTmpDir /tmp',
+      '',
+      'SecRuleEngine On',
+    ].join('\n');
+    const issues = validateSecLangDirectives(text);
+    expect(issues).toHaveLength(2);
+    expect(issues[0]).toMatchObject({ line: 3, severity: 'error', directive: 'SecTmpDir' });
+    expect(issues[1]).toMatchObject({ line: 5, severity: 'warning', directive: 'SecRuleEngine' });
+  });
+
+  it('handles case-insensitive matching', () => {
+    const issues = validateSecLangDirectives('sectmpdir /tmp');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+  });
+
+  it('handles prefix matching for directive families', () => {
+    const issues = validateSecLangDirectives('SecAuditLogRelevantStatus "^(?:5|4\\d[^4])"\nSecDebugLogLevel 3');
+    expect(issues).toHaveLength(2);
+    expect(issues.every((i) => i.severity === 'error')).toBe(true);
   });
 });

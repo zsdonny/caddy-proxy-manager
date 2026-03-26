@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
 import { applyCaddyConfig } from "@/src/lib/caddy";
+import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
 import {
   createProxyHost,
   deleteProxyHost,
@@ -315,6 +316,15 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
   const customDirectives = typeof formData.get("waf_custom_directives") === "string"
     ? (formData.get("waf_custom_directives") as string).trim()
     : "";
+
+  // Reject unsupported SecLang directives before saving
+  const secLangErrors = validateSecLangDirectives(customDirectives)
+    .filter(i => i.severity === 'error');
+  if (secLangErrors.length > 0) {
+    const detail = secLangErrors.map(e => `Line ${e.line}: ${e.message}`).join('; ');
+    throw new Error(`Custom directives contain unsupported Coraza directives: ${detail}`);
+  }
+
   const rawExcl = formData.get("waf_excluded_rule_ids");
   const excluded_rule_ids: number[] = rawExcl
     ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)

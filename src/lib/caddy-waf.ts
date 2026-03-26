@@ -5,6 +5,120 @@
 import { type WafSettings } from "./settings";
 import { type WafHostConfig } from "./models/proxy-hosts";
 
+// ---------------------------------------------------------------------------
+// Coraza SecLang directive validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Directives that exist in Apache ModSecurity but are NOT implemented by
+ * Coraza's Go SecLang parser.  Pasting these into custom directives causes
+ * Caddy to reject the WAF config with a hard 400 error.
+ */
+const UNSUPPORTED_DIRECTIVES = new Set([
+  'sectmpdir',
+  'secdatadir',
+  'secuploaddir',
+  'sectmpsaveuploadedfiles',
+  'secunicodemapfile',
+  'secauditlogtype',
+  'secauditlogrelevant',         // prefix match covers SecAuditLogRelevantStatus
+  'secdebuglog',                 // prefix match covers SecDebugLog and SecDebugLogLevel
+  'seccookieformat',
+  'secargumentseparator',
+  'secserversignature',
+  'seccomponentSignature',       // note: set is case-insensitive via lowercase match
+  'sechashmethodrx',
+  'sechashmethodpm',
+  'sechashengine',
+  'sechashparam',
+  'sechashkey',
+  'secencryptionkey',
+]);
+
+/**
+ * Directives that buildWafHandler already emits. Users should not duplicate
+ * these in custom directives because the values will conflict or be ignored.
+ */
+const MANAGED_DIRECTIVES = new Set([
+  'secruleengine',
+  'secrequestbodyaccess',
+  'secrequestbodylimit',
+  'secrequestbodynofileslimit',
+  'secrequestbodylimitaction',
+  'secresponsebodyaccess',
+  'secauditengine',
+  'secauditlog',
+  'secauditlogformat',
+  'secauditlogparts',
+]);
+
+export type SecLangIssue = {
+  line: number;
+  directive: string;
+  severity: 'error' | 'warning';
+  message: string;
+};
+
+/**
+ * Validates custom SecLang directives and returns an array of issues.
+ * - **error**: directive will crash Coraza (unsupported by Go parser)
+ * - **warning**: directive duplicates one that the system manages automatically
+ *
+ * Also flags `Include @coraza.conf-recommended` as an error.
+ */
+export function validateSecLangDirectives(text: string): SecLangIssue[] {
+  if (!text.trim()) return [];
+  const issues: SecLangIssue[] = [];
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (!raw || raw.startsWith('#')) continue;
+
+    // Check for Include @coraza.conf-recommended
+    if (/^\s*Include\s+@coraza\.conf-recommended\b/i.test(raw)) {
+      issues.push({
+        line: i + 1,
+        directive: 'Include @coraza.conf-recommended',
+        severity: 'error',
+        message: 'This file contains directives unsupported by Coraza and will crash Caddy.',
+      });
+      continue;
+    }
+
+    // Extract the directive name (first token on the line)
+    const match = raw.match(/^(Sec\w+|Include)\b/i);
+    if (!match) continue;
+    const directive = match[1];
+    const lower = directive.toLowerCase();
+
+    // Check unsupported directives (prefix match for families like SecDebugLog*)
+    for (const unsupported of UNSUPPORTED_DIRECTIVES) {
+      if (lower === unsupported || lower.startsWith(unsupported)) {
+        issues.push({
+          line: i + 1,
+          directive,
+          severity: 'error',
+          message: `"${directive}" is not supported by Coraza and will cause Caddy to reject the config.`,
+        });
+        break;
+      }
+    }
+
+    // Check managed directives
+    if (MANAGED_DIRECTIVES.has(lower)) {
+      issues.push({
+        line: i + 1,
+        directive,
+        severity: 'warning',
+        message: `"${directive}" is managed automatically. Your value may conflict or be ignored.`,
+      });
+    }
+  }
+
+  return issues;
+}
+
 /**
  * Resolves the effective WAF settings for a proxy host by merging or overriding
  * the global WAF settings with the per-host WAF config.
@@ -141,12 +255,16 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
   );
 
   if (waf.custom_directives?.trim()) {
-    // Strip Include @coraza.conf-recommended — that file contains directives
-    // Coraza's Go parser does not implement (SecTmpSaveUploadedFiles, etc.)
-    // and may be present in the DB from older versions.
+    // Strip any lines that would crash Coraza (unsupported directives, bad includes).
+    // Warnings (managed directive duplicates) are allowed through — they're harmless.
+    const errorLines = new Set(
+      validateSecLangDirectives(waf.custom_directives)
+        .filter(i => i.severity === 'error')
+        .map(i => i.line)
+    );
     const sanitized = waf.custom_directives
       .split('\n')
-      .filter(l => !/^\s*Include\s+@coraza\.conf-recommended\b/i.test(l))
+      .filter((_, idx) => !errorLines.has(idx + 1))
       .join('\n')
       .trim();
     if (sanitized) parts.push(sanitized);

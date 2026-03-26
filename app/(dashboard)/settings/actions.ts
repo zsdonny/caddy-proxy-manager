@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
+import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
 import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
@@ -707,6 +708,15 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
     const customDirectives = typeof formData.get("waf_custom_directives") === "string"
       ? (formData.get("waf_custom_directives") as string).trim()
       : "";
+
+    // Reject unsupported SecLang directives before saving
+    const secLangErrors = validateSecLangDirectives(customDirectives)
+      .filter(i => i.severity === 'error');
+    if (secLangErrors.length > 0) {
+      const detail = secLangErrors.map(e => `Line ${e.line}: ${e.message}`).join('; ');
+      return { success: false, message: `Custom directives contain unsupported Coraza directives: ${detail}` };
+    }
+
     const rawExcl = formData.get("waf_excluded_rule_ids");
     let excluded_rule_ids: number[];
     if (rawExcl !== null) {

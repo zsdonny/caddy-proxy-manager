@@ -5,8 +5,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ClipboardCopy, ShieldOff } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, ClipboardCopy, ShieldOff, AlertTriangle, CircleX } from "lucide-react";
+import { useMemo, useState } from "react";
+import { validateSecLangDirectives } from "@/lib/caddy-waf";
 import { type WafHostConfig } from "@/lib/models/proxy-hosts";
 import { WafRuleExclusions } from "./WafRuleExclusions";
 
@@ -34,6 +35,9 @@ export function WafFields({ value, showModeSelector = true }: Props) {
   const [loadCrs, setLoadCrs] = useState(value?.load_owasp_crs ?? true);
   const [customDirectives, setCustomDirectives] = useState(value?.custom_directives ?? "");
   const [showTemplates, setShowTemplates] = useState(false);
+
+  const secLangIssues = useMemo(() => validateSecLangDirectives(customDirectives), [customDirectives]);
+  const hasSecLangErrors = secLangIssues.some((i) => i.severity === "error");
 
   return (
     <div className="rounded-lg border border-destructive bg-destructive/5 p-4">
@@ -152,11 +156,31 @@ export function WafFields({ value, showModeSelector = true }: Props) {
             placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
             value={customDirectives}
             onChange={(e) => setCustomDirectives(e.target.value)}
-            className="font-mono text-xs min-h-[80px]"
+            className={cn("font-mono text-xs min-h-[80px]", hasSecLangErrors && "border-red-500")}
             rows={3}
           />
+          {secLangIssues.length > 0 && (
+            <div className="mt-1.5 space-y-1">
+              {secLangIssues.map((issue, i) => (
+                <p
+                  key={i}
+                  className={cn(
+                    "text-xs flex items-start gap-1",
+                    issue.severity === "error" ? "text-red-600" : "text-amber-600"
+                  )}
+                >
+                  {issue.severity === "error" ? (
+                    <CircleX className="h-3 w-3 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  )}
+                  Line {issue.line}: {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-muted-foreground mt-1">
-            Custom SecLang Directives — ModSecurity SecLang syntax. Appended after OWASP CRS if enabled.
+            Custom SecLang Directives — ModSecurity SecLang syntax. Appended after OWASP CRS if enabled. Engine, body, and audit directives are managed automatically.
           </p>
         </div>
 

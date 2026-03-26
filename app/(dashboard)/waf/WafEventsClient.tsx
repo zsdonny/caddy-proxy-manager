@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Search, X, ShieldOff, Trash2, Copy, ChevronDown } from "lucide-react";
+import { Search, X, ShieldOff, Trash2, Copy, ChevronDown, AlertTriangle, CircleX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { DataTable } from "@/components/ui/DataTable";
 import type { WafEvent } from "@/lib/models/waf-events";
 import type { WafSettings } from "@/lib/settings";
+import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
 import {
   suppressWafRuleGloballyAction,
   suppressWafRuleForHostAction,
@@ -434,6 +435,8 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
   const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates] = useState(false);
+  const secLangIssues = useMemo(() => validateSecLangDirectives(wafCustomDirectives), [wafCustomDirectives]);
+  const hasSecLangErrors = secLangIssues.some(i => i.severity === 'error');
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -658,9 +661,19 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
                   value={wafCustomDirectives}
                   onChange={(e) => setWafCustomDirectives(e.target.value)}
                   placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
-                  className="font-mono text-[0.8rem] resize-y"
+                  className={cn("font-mono text-[0.8rem] resize-y", hasSecLangErrors && "border-red-500")}
                 />
-                <p className="text-xs text-muted-foreground">ModSecurity SecLang syntax. Applied after OWASP CRS if enabled.</p>
+                {secLangIssues.length > 0 && (
+                  <div className="flex flex-col gap-1 mt-1">
+                    {secLangIssues.map((issue, i) => (
+                      <p key={i} className={cn("text-xs flex items-start gap-1", issue.severity === 'error' ? 'text-red-500' : 'text-amber-500')}>
+                        {issue.severity === 'error' ? <CircleX className="h-3.5 w-3.5 shrink-0 mt-px" /> : <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />}
+                        <span>Line {issue.line}: {issue.message}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">ModSecurity SecLang syntax. Applied after OWASP CRS if enabled. Engine, body, and audit directives are managed automatically.</p>
               </div>
               <div>
                 <Button
@@ -707,7 +720,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
                 </AlertDescription>
               </Alert>
               <div className="flex justify-end">
-                <Button type="submit">Save WAF settings</Button>
+                <Button type="submit" disabled={hasSecLangErrors}>Save WAF settings</Button>
               </div>
             </form>
           </div>
