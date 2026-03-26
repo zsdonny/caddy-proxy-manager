@@ -68,6 +68,7 @@ export function RedirectsFields({ initialData = [] }: Props) {
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => removeRule(i)}
+                  aria-label="Delete redirect"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

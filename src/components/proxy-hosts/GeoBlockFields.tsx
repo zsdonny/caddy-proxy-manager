@@ -139,12 +139,14 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 text-sm pr-8"
+          aria-label="Search countries"
         />
         {search && (
           <button
             type="button"
             onClick={() => setSearch("")}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -241,6 +243,7 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
                     type="button"
                     onClick={() => toggle(code)}
                     className="rounded-full hover:bg-destructive/20 p-0.5"
+                    aria-label={`Remove ${country?.name ?? code}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -387,7 +390,7 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
   return (
     <div>
       <input type="hidden" name={name} value={tags.join(",")} />
-      <label className="text-sm font-medium mb-1 block">{label}</label>
+      <label className="text-sm font-medium mb-1 block" htmlFor={`taginput-${name}`}>{label}</label>
       <div className={cn(
         "flex flex-wrap items-center gap-1 min-h-9 border rounded-md px-3 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
         error ? "border-destructive" : "border-input",
@@ -400,6 +403,7 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
               type="button"
               onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
               className="rounded-full hover:bg-destructive/20 p-0.5"
+              aria-label={`Remove ${tag}`}
             >
               <X className="h-2.5 w-2.5" />
             </button>
@@ -410,6 +414,7 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
           value={inputValue}
           placeholder={tags.length === 0 ? placeholder : undefined}
           onChange={(e) => setInputValue(e.target.value)}
+          id={`taginput-${name}`}
           onKeyDown={(e) => {
             if (e.key === "," || e.key === " " || e.key === "Enter") {
               e.preventDefault();
@@ -450,7 +455,7 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
           size="icon"
           className="h-7 w-7"
           onClick={() => setRows((prev) => [...prev, { key: "", value: "" }])}
-          title="Add header"
+          aria-label="Add header"
         >
           <span className="text-base leading-none">+</span>
         </Button>
@@ -468,12 +473,14 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
                 value={row.key}
                 onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
                 className="h-8 text-sm"
+                aria-label={`Header name ${i + 1}`}
               />
               <Input
                 placeholder="Value"
                 value={row.value}
                 onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
                 className="h-8 text-sm"
+                aria-label={`Header value ${i + 1}`}
               />
               <Button
                 type="button"
@@ -481,7 +488,7 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
                 size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                 onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-                title="Remove"
+                aria-label="Remove header"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -620,6 +627,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true, hideAdv
           checked={enabled}
           onCheckedChange={setEnabled}
           className="shrink-0"
+          aria-label="Enable geo blocking"
         />
       </div>
 

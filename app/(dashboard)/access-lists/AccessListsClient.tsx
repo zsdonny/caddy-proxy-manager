@@ -166,7 +166,7 @@ export default function AccessListsClient({ lists, pagination }: Props) {
                             </div>
                           </div>
                           <form action={deleteAccessEntryAction.bind(null, list.id, entry.id)}>
-                            <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                            <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" aria-label={`Delete account ${entry.username}`}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </form>

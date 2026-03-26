@@ -315,6 +315,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
                       className="text-destructive"
                       onClick={handleAvatarDelete}
                       disabled={loading}
+                      aria-label="Delete avatar"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

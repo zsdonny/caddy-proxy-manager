@@ -49,6 +49,7 @@ export function WafRuleExclusions({ value }: Props) {
                 type="button"
                 onClick={() => removeId(id)}
                 className="rounded-full hover:bg-destructive/20 p-0.5"
+                aria-label={`Remove rule ${id}`}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -66,8 +67,9 @@ export function WafRuleExclusions({ value }: Props) {
           inputMode="numeric"
           pattern="[0-9]*"
           className={`flex-1 h-8 text-sm${error ? " border-destructive" : ""}`}
+          aria-label="Rule ID"
         />
-        <Button type="button" size="icon" variant="ghost" onClick={addId} className="h-8 w-8">
+        <Button type="button" size="icon" variant="ghost" onClick={addId} className="h-8 w-8" aria-label="Add rule ID">
           <Plus className="h-4 w-4" />
         </Button>
       </div>

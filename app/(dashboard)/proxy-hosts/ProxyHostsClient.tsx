@@ -338,6 +338,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           <Switch
             checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
             onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
+            aria-label={`Toggle ${host.name}`}
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -386,6 +387,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
             <Switch
               checked={optimisticEnabled.has(host.id) ? optimisticEnabled.get(host.id)! : host.enabled}
               onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
+              aria-label={`Toggle ${host.name}`}
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

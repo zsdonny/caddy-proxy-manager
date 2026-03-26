@@ -147,7 +147,7 @@ function WafEventDrawer({
                 <SeverityChip severity={event.severity} />
                 <h2 className="text-lg font-semibold">WAF Event</h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
                 <X className="h-4 w-4" />
               </Button>
             </div>

@@ -65,6 +65,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
           checked={enabled}
           onCheckedChange={setEnabled}
           className="shrink-0"
+          aria-label="Enable WAF"
         />
       </div>
 
@@ -158,6 +159,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
             onChange={(e) => setCustomDirectives(e.target.value)}
             className={cn("font-mono text-xs min-h-[80px]", hasSecLangErrors && "border-red-500")}
             rows={3}
+            aria-label="Custom SecLang directives"
           />
           {secLangIssues.length > 0 && (
             <div className="mt-1.5 space-y-1">
