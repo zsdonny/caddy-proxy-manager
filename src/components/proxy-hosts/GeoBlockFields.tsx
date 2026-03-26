@@ -715,29 +715,31 @@ export function GeoBlockFields({ initialValues, showModeSelector = true, hideAdv
                         type="number"
                         min={100}
                         max={599}
-                        defaultValue={initialFull?.response_status ?? 403}
+                        defaultValue={initialFull?.response_status ?? (showModeSelector ? "" : 403)}
+                        placeholder={showModeSelector ? "Inherit (403)" : "403"}
                         className="h-8 text-sm"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">HTTP status when blocked</p>
+                      <p className="text-xs text-muted-foreground mt-1">{showModeSelector ? "Leave empty to inherit from global" : "HTTP status when blocked"}</p>
                     </div>
                     <div className="col-span-2">
                       <label className="text-sm font-medium mb-1 block">Response Body</label>
                       <Input
                         name="geoblock_response_body"
-                        defaultValue={initialFull?.response_body ?? "Forbidden"}
+                        defaultValue={initialFull?.response_body ?? (showModeSelector ? "" : "Forbidden")}
+                        placeholder={showModeSelector ? "Inherit (Forbidden)" : ""}
                         className="h-8 text-sm"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Body text returned to blocked clients</p>
+                      <p className="text-xs text-muted-foreground mt-1">{showModeSelector ? "Leave empty to inherit from global" : "Body text returned to blocked clients"}</p>
                     </div>
                     <div className="col-span-3">
                       <label className="text-sm font-medium mb-1 block">Redirect URL</label>
                       <Input
                         name="geoblock_redirect_url"
                         defaultValue={initialFull?.redirect_url ?? ""}
-                        placeholder="https://example.com/blocked"
+                        placeholder={showModeSelector ? "Inherit from global, or enter URL" : "https://example.com/blocked"}
                         className="h-8 text-sm"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">If set, sends a 302 redirect instead of status/body above</p>
+                      <p className="text-xs text-muted-foreground mt-1">{showModeSelector ? "Leave empty to inherit from global. If set, sends a 302 redirect instead of status/body" : "If set, sends a 302 redirect instead of status/body above"}</p>
                     </div>
                   </div>
 

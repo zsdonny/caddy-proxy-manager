@@ -627,8 +627,8 @@ function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> 
   if (config.redirect_url) {
     handler.redirect_url = config.redirect_url;
   } else {
-    if (config.response_status) handler.response_status = config.response_status;
-    if (config.response_body) handler.response_body = config.response_body;
+    handler.response_status = config.response_status ?? 403;
+    handler.response_body = config.response_body ?? "Forbidden";
     if (config.response_headers && Object.keys(config.response_headers).length) {
       handler.response_headers = config.response_headers;
     }

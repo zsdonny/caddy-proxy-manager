@@ -279,12 +279,19 @@ function parseGeoBlockConfig(formData: FormData): {
     trusted_proxies: parseStringList("geoblock_trusted_proxies"),
     fail_closed: formData.get("geoblock_fail_closed") === "on",
     response_status: (() => {
-      const s = parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403;
-      return s >= 100 && s <= 599 ? s : 403;
+      const s = parseOptionalNumber(formData.get("geoblock_response_status"));
+      if (s === null) return undefined; // empty → inherit from global
+      return s >= 100 && s <= 599 ? s : undefined;
     })(),
-    response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? "Forbidden",
-    response_headers: parseResponseHeaders(formData),
-    redirect_url: parseRedirectUrl(formData.get("geoblock_redirect_url")),
+    response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? undefined,
+    response_headers: (() => {
+      const h = parseResponseHeaders(formData);
+      return Object.keys(h).length ? h : undefined;
+    })(),
+    redirect_url: (() => {
+      const url = parseRedirectUrl(formData.get("geoblock_redirect_url"));
+      return url || undefined; // empty → inherit from global
+    })(),
   };
 
   return { geoblock: config, geoblock_mode: mode };

@@ -68,11 +68,11 @@ export type GeoBlockSettings = {
   // (e.g. connection from trusted proxy but no usable XFF entry). Default: false (fail-open)
   fail_closed: boolean;
 
-  // Block response customization
-  response_status: number;        // default 403
-  response_body: string;          // default "Forbidden"
-  response_headers: Record<string, string>;
-  redirect_url: string;           // if set, 302 redirect instead of status/body
+  // Block response customization (optional — omit to inherit from global)
+  response_status?: number;        // default 403
+  response_body?: string;          // default "Forbidden"
+  response_headers?: Record<string, string>;
+  redirect_url?: string;           // if set, 302 redirect instead of status/body
 };
 
 type InstanceMode = "standalone" | "primary" | "replica";
