@@ -68,9 +68,9 @@ describe('buildWafHandler — without OWASP CRS', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildWafHandler — with OWASP CRS', () => {
-  it('includes @coraza.conf-recommended when load_owasp_crs is true', () => {
+  it('does NOT include @coraza.conf-recommended (uses inline directives instead)', () => {
     const handler = buildWafHandler({ ...baseWaf, load_owasp_crs: true });
-    expect(handler.directives).toContain('Include @coraza.conf-recommended');
+    expect(handler.directives).not.toContain('@coraza.conf-recommended');
   });
 
   it('includes @crs-setup.conf.example when load_owasp_crs is true', () => {
@@ -88,12 +88,12 @@ describe('buildWafHandler — with OWASP CRS', () => {
     expect(handler.load_owasp_crs).toBe(true);
   });
 
-  it('@coraza.conf-recommended appears BEFORE CRS includes', () => {
+  it('engine directives appear BEFORE CRS includes', () => {
     const handler = buildWafHandler({ ...baseWaf, load_owasp_crs: true });
     const directives = handler.directives as string;
-    const corazaPos = directives.indexOf('@coraza.conf-recommended');
+    const enginePos = directives.indexOf('SecRuleEngine');
     const crsPos = directives.indexOf('@owasp_crs');
-    expect(corazaPos).toBeLessThan(crsPos);
+    expect(enginePos).toBeLessThan(crsPos);
   });
 });
 
@@ -150,6 +150,7 @@ describe('buildWafHandler — handler structure', () => {
     expect(handler.directives).toContain('SecRequestBodyAccess On');
     expect(handler.directives).toContain('SecRequestBodyLimit 13107200');
     expect(handler.directives).toContain('SecRequestBodyNoFilesLimit 131072');
+    expect(handler.directives).toContain('SecRequestBodyLimitAction Reject');
   });
 
   it('emits request body directives even when OWASP CRS is loaded', () => {

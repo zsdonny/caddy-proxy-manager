@@ -68,12 +68,11 @@ export function resolveEffectiveWaf(
 /**
  * Builds the Caddy `waf` handler object for the given WAF settings.
  *
- * Important: @-prefixed SecLang paths (e.g. @coraza.conf-recommended) resolve
- * from the embedded coraza-coreruleset filesystem, which is only mounted by the
- * Caddy WAF plugin when `load_owasp_crs: true`.  Including those directives when
- * the embedded filesystem is unavailable causes a Caddy config load error:
- *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
- * Therefore all @-prefixed includes are gated behind load_owasp_crs.
+ * All engine/body/audit directives are emitted inline rather than relying on the
+ * embedded `@coraza.conf-recommended` file, which contains directives Coraza's Go
+ * SecLang parser does not implement (SecTmpSaveUploadedFiles, SecUploadDir).
+ * The CRS setup and rules are still loaded from the embedded filesystem when
+ * `load_owasp_crs` is true — only the recommended config is replaced.
  *
  * @param allowWebsocket - When true, a SecLang rule is prepended that bypasses
  *   WAF inspection for the initial HTTP upgrade request (Upgrade: websocket).
@@ -98,11 +97,28 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     );
   }
 
+  // Engine and body inspection directives — emitted BEFORE CRS includes so the
+  // rule engine is configured before any rules are evaluated.
+  parts.push(
+    `SecRuleEngine ${waf.mode}`,
+    // Enable request body inspection so rules can match POST/PUT payloads (SQLi, XSS in forms).
+    'SecRequestBodyAccess On',
+    'SecRequestBodyLimit 13107200',         // 12.5 MB
+    'SecRequestBodyNoFilesLimit 131072',    // 128 KB
+    'SecRequestBodyLimitAction Reject',
+    'SecResponseBodyAccess Off',
+  );
+
   if (waf.load_owasp_crs) {
     // @-prefixed paths resolve from the embedded coraza-coreruleset filesystem,
     // which is only mounted when load_owasp_crs is true.
+    //
+    // NOTE: We intentionally skip `Include @coraza.conf-recommended`.  That file
+    // contains directives Coraza's Go SecLang parser does not implement (e.g.
+    // SecTmpSaveUploadedFiles, SecUploadDir) which cause a hard 400 error on
+    // config load.  All useful directives from that file are emitted inline above
+    // and below (SecRuleEngine, SecRequestBodyAccess/Limit, SecAuditEngine, etc.).
     parts.push(
-      'Include @coraza.conf-recommended',
       'Include @crs-setup.conf.example',
       'Include @owasp_crs/*.conf',
     );
@@ -113,14 +129,6 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
   }
 
   parts.push(
-    `SecRuleEngine ${waf.mode}`,
-    // Enable request body inspection so rules can match POST/PUT payloads (SQLi, XSS in forms).
-    // When OWASP CRS is loaded, @coraza.conf-recommended already sets these — our directives
-    // come after and ensure the same limits apply regardless, so custom-only WAF configs also
-    // get body inspection.  Users can override via custom_directives (which are appended last).
-    'SecRequestBodyAccess On',
-    'SecRequestBodyLimit 13107200',      // 12.5 MB (same as CRS default)
-    'SecRequestBodyNoFilesLimit 131072', // 128 KB (same as CRS default)
     // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
     // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
     // Clean requests with no rule matches are silently skipped, avoiding massive log growth.
@@ -130,7 +138,6 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     // Omit request/response bodies (parts I, J, E) and intermediate response headers (D)
     // to prevent logging multi-MB payloads. Headers (B, F) and rule match trailer (H) are kept.
     'SecAuditLogParts ABFHZ',
-    'SecResponseBodyAccess Off',
   );
 
   if (waf.custom_directives?.trim()) {
