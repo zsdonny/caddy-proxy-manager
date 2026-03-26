@@ -665,10 +665,10 @@ export function GeoBlockFields({ initialValues, showModeSelector = true, hideAdv
             <TabsTrigger value="block" className="flex-1">Block Rules</TabsTrigger>
             <TabsTrigger value="allow" className="flex-1">Allow Rules</TabsTrigger>
           </TabsList>
-          <TabsContent value="block" className="mt-4">
+          <TabsContent value="block" forceMount className="mt-4 data-[state=inactive]:hidden">
             <RulesPanel prefix="block" initial={initial} />
           </TabsContent>
-          <TabsContent value="allow" className="mt-4">
+          <TabsContent value="allow" forceMount className="mt-4 data-[state=inactive]:hidden">
             <p className="text-xs text-muted-foreground mb-3">
               Allow rules take precedence over block rules.
             </p>
