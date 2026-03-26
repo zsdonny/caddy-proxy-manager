@@ -337,13 +337,9 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
     ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
     : [];
 
-  if (!enabled) {
-    return { waf: { enabled: false, waf_mode: wafMode } };
-  }
-
   return {
     waf: {
-      enabled: true,
+      enabled,
       mode: engineMode,
       load_owasp_crs: loadCrs,
       custom_directives: customDirectives,
@@ -412,7 +408,6 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
 function parseMtlsConfig(formData: FormData): MtlsConfig | null {
   if (!formData.has("mtls_present")) return null;
   const enabled = formData.get("mtls_enabled") === "true";
-  if (!enabled) return null;
   const ids = formData.getAll("mtls_ca_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
   return { enabled, ca_certificate_ids: ids };
 }

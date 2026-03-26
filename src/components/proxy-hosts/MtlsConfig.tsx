@@ -33,7 +33,7 @@ export function MtlsFields({ value, caCertificates, disabled, disabledReason }: 
     )}>
       <input type="hidden" name="mtls_present" value="1" />
       <input type="hidden" name="mtls_enabled" value={!disabled && enabled ? "true" : "false"} />
-      {!disabled && enabled && selectedIds.map(id => (
+      {selectedIds.map(id => (
         <input key={id} type="hidden" name="mtls_ca_cert_id" value={String(id)} />
       ))}
 

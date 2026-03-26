@@ -562,7 +562,7 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.waf = meta.waf;
   }
 
-  if (meta.mtls && meta.mtls.enabled) {
+  if (meta.mtls) {
     normalized.mtls = meta.mtls;
   }
 
@@ -1087,7 +1087,7 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
   }
 
   if (input.mtls !== undefined) {
-    if (input.mtls && input.mtls.enabled) {
+    if (input.mtls) {
       next.mtls = input.mtls;
     } else {
       delete next.mtls;

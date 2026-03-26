@@ -443,10 +443,10 @@ function parseL4ProxyHost(row: L4ProxyHostRow): L4ProxyHost {
     load_balancer: hydrateL4LoadBalancer(meta.load_balancer),
     dns_resolver: hydrateL4DnsResolver(meta.dns_resolver),
     upstream_dns_resolution: hydrateL4UpstreamDnsResolution(meta.upstream_dns_resolution),
-    geoblock: meta.geoblock?.enabled ? meta.geoblock : null,
+    geoblock: meta.geoblock ?? null,
     geoblock_mode: meta.geoblock_mode ?? "merge",
     upstream_tls: hydrateL4UpstreamTls(meta.upstream_tls),
-    mtls: meta.mtls?.enabled && meta.mtls.ca_certificate_ids?.length ? meta.mtls : null,
+    mtls: meta.mtls ?? null,
     idle_timeout: normalizeMetaValue(meta.idle_timeout ?? null),
     certificate_id: typeof meta.certificate_id === "number" ? meta.certificate_id : null,
     created_at: toIso(row.createdAt)!,
@@ -744,7 +744,7 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
           }
         }
         if (input.mtls !== undefined) {
-          if (input.mtls && input.mtls.enabled && input.mtls.ca_certificate_ids.length > 0) {
+          if (input.mtls) {
             meta.mtls = input.mtls;
           } else {
             delete meta.mtls;
