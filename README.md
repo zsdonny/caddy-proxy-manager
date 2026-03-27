@@ -25,7 +25,7 @@
 | **Pre-built Docker images** | Multi-arch (amd64/arm64) images published to GHCR with separate build workflows for web, Caddy, and l4-port-manager |
 | **Macvlan mode** | Zero-downtime L4 port changes — Caddy gets its own LAN IP via macvlan, L4 port changes become instant config reloads instead of container recreations |
 | **L4 feature parity** | Full mTLS, Geo Blocking, and Upstream TLS dial support for L4 proxy hosts — matching HTTP proxy capabilities with shared components and server-side certificate validation |
-| **WAF event management** | Per-rule suppression UI (global + per-host) from the event drawer; custom SecLang directive validation with real-time error reporting; audit log truncation to prevent unbounded disk growth |
+| **WAF event management** | Per-rule suppression UI (global + per-host) from the event drawer; Rule Library with built-in presets (WordPress, Django, Node.js) and custom SecLang rule sets; real-time directive validation; audit log truncation |
 | **ACME certificate cache** | TLS probe-based certificate metadata (issuer, validity, SANs) stored in a DB cache — instant cert page loads with no filesystem scanning |
 | **UI polish & consistency** | Optimistic toggles, submit spinners, deferred config reloads; toggle-panel pattern (no dual chevron+toggle); aligned badge variants, filter icons, and mobile cards between HTTP and L4; dynamic TLS warning text |
 | **Interactive Storybook** | Component and page interaction tests via `@storybook/addon-vitest`; deployed to GitHub Pages on every successful CI run |

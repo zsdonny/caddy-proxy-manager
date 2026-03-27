@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { userEvent, within, expect } from 'storybook/test';
 import WafEventsClient from '../../app/(dashboard)/waf/WafEventsClient';
 import type { WafEvent } from '../../src/lib/models/waf-events';
+import type { RuleSetItem } from '../../src/components/waf/RuleSetDialog';
 
 const meta: Meta<typeof WafEventsClient> = {
   title: 'Components/WafEventsClient',
@@ -105,6 +106,38 @@ const mockEvents: WafEvent[] = [
   }),
 ];
 
+// ── Mock Rule Sets ────────────────────────────────────────────────────────────
+
+const mockRuleSets: RuleSetItem[] = [
+  {
+    id: 1,
+    name: 'WordPress',
+    description: 'Relaxes CRS rules commonly triggered by WordPress admin, REST API, and file uploads.',
+    directives: 'SecRule REQUEST_URI "@rx ^/wp-(?:admin|login)" "id:70001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    isPreset: true,
+    createdAt: '2026-03-27T00:00:00Z',
+    updatedAt: '2026-03-27T00:00:00Z',
+  },
+  {
+    id: 2,
+    name: 'Node.js / Express API',
+    description: 'Relaxes CRS rules for JSON APIs, JWTs, and common Node.js patterns.',
+    directives: 'SecRule REQUEST_URI "@beginsWith /api/" "id:70020,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    isPreset: true,
+    createdAt: '2026-03-27T00:00:00Z',
+    updatedAt: '2026-03-27T00:00:00Z',
+  },
+  {
+    id: 3,
+    name: 'My Scanner Blocker',
+    description: null,
+    directives: 'SecRule REQUEST_HEADERS:User-Agent "@contains leakix" "id:60001,phase:1,deny,status:403,log"',
+    isPreset: false,
+    createdAt: '2026-03-25T10:30:00Z',
+    updatedAt: '2026-03-26T14:00:00Z',
+  },
+];
+
 // ── Default WAF settings stub ─────────────────────────────────────────────────
 
 const defaultGlobalWaf = {
@@ -136,7 +169,7 @@ export const WithEvents: Story = {
     globalWafEnabled: true,
     hostWafMap: {},
     globalWaf: defaultGlobalWaf,
-    ruleSets: [],
+    ruleSets: mockRuleSets,
   },
 };
 
