@@ -436,7 +436,7 @@ export default function AnalyticsClient() {
   const wafBarOptions: ApexOptions = {
     ...DARK_CHART,
     chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules' },
-    colors: ['#f59e0b'],
+    colors: [wafIncludeMuted ? '#64748b' : '#f59e0b'],
     plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
     dataLabels: { enabled: false },
     xaxis: { categories: wafRuleLabels, labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
@@ -453,7 +453,7 @@ export default function AnalyticsClient() {
   return (
     <div className="flex flex-col gap-8 max-w-full overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-1 px-1 py-2">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Traffic Intelligence</p>
           <h1 className="text-xl font-bold tracking-tight">Analytics</h1>
@@ -493,6 +493,27 @@ export default function AnalyticsClient() {
             selectedHosts={selectedHosts}
             onChange={setSelectedHosts}
           />
+
+          {/* Scanner noise toggle */}
+          <div className="flex items-center rounded-md border border-input p-0.5 gap-0.5">
+            <Button
+              size="sm"
+              variant={!wafIncludeMuted ? 'default' : 'ghost'}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => setWafIncludeMuted(false)}
+            >
+              Clean
+            </Button>
+            <Button
+              size="sm"
+              variant={wafIncludeMuted ? 'default' : 'ghost'}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => setWafIncludeMuted(true)}
+            >
+              <ShieldOff className="h-3 w-3 mr-1" />
+              All
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -529,30 +550,12 @@ export default function AnalyticsClient() {
               sub={`${formatBytes(summary.bytesServed)} served`}
               color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
             />
-            <div className="h-full rounded-lg border border-white/[0.12] p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">WAF Events</p>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={wafIncludeMuted ? 'secondary' : 'ghost'}
-                      size="icon"
-                      className="h-5 w-5"
-                      onClick={() => setWafIncludeMuted(prev => !prev)}
-                    >
-                      <ShieldOff className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{wafIncludeMuted ? 'Showing scanner noise — click to hide' : 'Scanner noise hidden — click to show'}</TooltipContent>
-                </Tooltip>
-              </div>
-              <p className="mt-1 text-3xl font-bold tracking-tight" style={(wafStats?.total ?? 0) > 0 ? { color: '#f59e0b' } : undefined}>
-                {(wafStats?.total ?? 0).toLocaleString()}
-              </p>
-              {wafStats && wafStats.topRules.length > 0
-                ? <p className="mt-1 text-sm text-muted-foreground">{wafStats.topRules.length} rules triggered</p>
-                : <p className="mt-1 text-sm text-muted-foreground">No WAF events</p>}
-            </div>
+            <StatCard
+              label={wafIncludeMuted ? 'WAF Events (incl. scanner)' : 'WAF Events'}
+              value={(wafStats?.total ?? 0).toLocaleString()}
+              sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
+              color={(wafStats?.total ?? 0) > 0 ? (wafIncludeMuted ? '#64748b' : '#f59e0b') : undefined}
+            />
           </div>
 
           {/* Timeline */}
@@ -735,8 +738,10 @@ export default function AnalyticsClient() {
 
           {/* WAF Top Rules */}
           {wafStats && wafStats.total > 0 && (
-            <div className="rounded-lg border border-white/[0.12] p-5">
-              <p className="text-sm font-semibold mb-4">Top WAF Rules Triggered</p>
+            <div className={cn('rounded-lg border border-white/[0.12] p-5', wafIncludeMuted && 'opacity-80')}>
+              <p className="text-sm font-semibold mb-4">
+                Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. scanner noise)' : ''}
+              </p>
               <div className="overflow-x-auto w-full">
                 <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
               </div>
