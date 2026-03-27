@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { isValidCidr } from "@/src/lib/cidr";
 
 import { DataTable } from "@/components/ui/DataTable";
 import type { WafEvent } from "@/lib/models/waf-events";
@@ -40,6 +41,8 @@ type Props = {
   events: WafEvent[];
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
+  initialIncludeMuted: boolean;
+  mutedCount: number;
   globalExcluded: number[];
   globalExcludedMessages: Record<number, string | null>;
   globalWafEnabled: boolean;
@@ -426,7 +429,7 @@ function GlobalSuppressedRules({
   );
 }
 
-export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf, ruleSets }: Props) {
+export default function WafEventsClient({ events, pagination, initialSearch, initialIncludeMuted, mutedCount, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf, ruleSets }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -440,6 +443,12 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates] = useState(false);
   const [wafRuleSetIds, setWafRuleSetIds] = useState<number[]>(globalWaf?.rule_set_ids ?? []);
+  const [mutedCidrs, setMutedCidrs] = useState<string[]>(globalWaf?.muted_sources?.cidrs ?? []);
+  const [mutedUaPatterns, setMutedUaPatterns] = useState<string[]>(globalWaf?.muted_sources?.ua_patterns ?? []);
+  const [mutedCidrInput, setMutedCidrInput] = useState("");
+  const [mutedUaInput, setMutedUaInput] = useState("");
+  const [cfLoading, setCfLoading] = useState(false);
+  const [includeMuted, setIncludeMuted] = useState(initialIncludeMuted);
   const secLangIssues = useMemo(() => validateSecLangDirectives(wafCustomDirectives), [wafCustomDirectives]);
   const hasSecLangErrors = secLangIssues.some(i => i.severity === 'error');
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
@@ -498,7 +507,16 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
     },
     {
       id: "blocked", label: "Action", width: 90,
-      render: (r: WafEvent) => <BlockedChip blocked={r.blocked} />,
+      render: (r: WafEvent) => (
+        <div className="flex items-center gap-1">
+          <BlockedChip blocked={r.blocked} />
+          {r.muted && (
+            <Badge variant="outline" className="text-[0.6rem] h-[16px] px-1 text-muted-foreground border-muted-foreground/40">
+              Muted
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       id: "severity", label: "Severity", width: 100,
@@ -590,14 +608,37 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
         </TabsList>
 
         <TabsContent value="events" className="flex flex-col gap-4">
-          <div className="relative max-w-[480px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by host, IP, URI, or rule message..."
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
-              className="pl-8"
-            />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative max-w-[480px] flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by host, IP, URI, or rule message..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
+                className="pl-8"
+              />
+            </div>
+            {mutedCount > 0 && (
+              <Button
+                variant={includeMuted ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  const next = !includeMuted;
+                  setIncludeMuted(next);
+                  const params = new URLSearchParams(searchParams.toString());
+                  if (next) {
+                    params.set("include_muted", "1");
+                  } else {
+                    params.delete("include_muted");
+                  }
+                  params.delete("page");
+                  router.push(`${pathname}?${params.toString()}`);
+                }}
+              >
+                <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
+                {includeMuted ? "Hide" : "Show"} muted ({mutedCount})
+              </Button>
+            )}
           </div>
           <DataTable
             columns={columns}
@@ -607,6 +648,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             pagination={pagination}
             onRowClick={setSelected}
             mobileCard={mobileCard}
+            rowClassName={(r: WafEvent) => r.muted ? "opacity-50" : ""}
           />
           <WafEventDrawer
             event={selected}
@@ -664,6 +706,153 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
                 onChange={setWafRuleSetIds}
                 inputName="waf_rule_set_ids"
               />
+              <Separator />
+              <div className="flex flex-col gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Muted Sources</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Events from muted sources are still logged but hidden by default in the Events tab.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>IP / CIDR Ranges</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={mutedCidrInput}
+                      onChange={(e) => setMutedCidrInput(e.target.value)}
+                      placeholder="e.g. 192.168.1.0/24"
+                      className="font-mono text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const v = mutedCidrInput.trim();
+                          if (v && isValidCidr(v) && !mutedCidrs.includes(v)) {
+                            setMutedCidrs((prev) => [...prev, v]);
+                            setMutedCidrInput("");
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const v = mutedCidrInput.trim();
+                        if (v && isValidCidr(v) && !mutedCidrs.includes(v)) {
+                          setMutedCidrs((prev) => [...prev, v]);
+                          setMutedCidrInput("");
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={cfLoading}
+                      onClick={async () => {
+                        setCfLoading(true);
+                        try {
+                          const res = await fetch("/api/cloudflare-ips");
+                          if (!res.ok) throw new Error("Failed to fetch");
+                          const data = await res.json() as { cidrs: string[]; source: string };
+                          const newCidrs = data.cidrs.filter((c: string) => !mutedCidrs.includes(c));
+                          if (newCidrs.length > 0) {
+                            setMutedCidrs((prev) => [...prev, ...newCidrs]);
+                            toast.success(`Added ${newCidrs.length} Cloudflare CIDR${newCidrs.length > 1 ? "s" : ""} (${data.source})`);
+                          } else {
+                            toast.info("All Cloudflare CIDRs already added");
+                          }
+                        } catch {
+                          toast.error("Failed to load Cloudflare IPs");
+                        } finally {
+                          setCfLoading(false);
+                        }
+                      }}
+                    >
+                      {cfLoading ? "Loading\u2026" : "Add Cloudflare IPs"}
+                    </Button>
+                  </div>
+                  {mutedCidrInput.trim() && !isValidCidr(mutedCidrInput.trim()) && (
+                    <p className="text-xs text-red-500">Invalid CIDR format</p>
+                  )}
+                  {mutedCidrs.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {mutedCidrs.map((cidr) => (
+                        <Badge key={cidr} variant="secondary" className="font-mono text-xs gap-1">
+                          {cidr}
+                          <button
+                            type="button"
+                            onClick={() => setMutedCidrs((prev) => prev.filter((c) => c !== cidr))}
+                            className="ml-0.5 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>User-Agent Patterns</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={mutedUaInput}
+                      onChange={(e) => setMutedUaInput(e.target.value)}
+                      placeholder="e.g. CloudFlare-* or *bot*"
+                      className="font-mono text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const v = mutedUaInput.trim();
+                          if (v && !mutedUaPatterns.includes(v)) {
+                            setMutedUaPatterns((prev) => [...prev, v]);
+                            setMutedUaInput("");
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const v = mutedUaInput.trim();
+                        if (v && !mutedUaPatterns.includes(v)) {
+                          setMutedUaPatterns((prev) => [...prev, v]);
+                          setMutedUaInput("");
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Glob-style patterns. Use * for any characters.
+                  </p>
+                  {mutedUaPatterns.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {mutedUaPatterns.map((p) => (
+                        <Badge key={p} variant="secondary" className="font-mono text-xs gap-1">
+                          {p}
+                          <button
+                            type="button"
+                            onClick={() => setMutedUaPatterns((prev) => prev.filter((x) => x !== p))}
+                            className="ml-0.5 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <input type="hidden" name="muted_cidrs" value={JSON.stringify(mutedCidrs)} />
+                <input type="hidden" name="muted_ua_patterns" value={JSON.stringify(mutedUaPatterns)} />
+              </div>
+              <Separator />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="waf_custom_directives">Custom SecLang Directives</Label>
                 <Textarea

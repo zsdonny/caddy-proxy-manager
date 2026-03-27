@@ -8,6 +8,7 @@ export type CloudflareSettings = {
   apiToken: string;
   zoneId?: string;
   accountId?: string;
+  fetchCloudflareIps?: boolean;
 };
 
 export type GeneralSettings = {
@@ -224,6 +225,10 @@ export type WafSettings = {
   custom_directives: string;
   excluded_rule_ids?: number[];
   rule_set_ids?: number[];
+  muted_sources?: {
+    cidrs: string[];
+    ua_patterns: string[];
+  };
 };
 
 export async function getWafSettings(): Promise<WafSettings | null> {

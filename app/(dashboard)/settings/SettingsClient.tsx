@@ -132,6 +132,7 @@ type Props = {
     hasToken: boolean;
     zoneId?: string;
     accountId?: string;
+    fetchCloudflareIps?: boolean;
   };
   authentik: AuthentikSettings | null;
   metrics: MetricsSettings | null;
@@ -547,6 +548,18 @@ export default function SettingsClient({
               <Label htmlFor="cf-accountId">Account ID</Label>
               <Input id="cf-accountId" name="accountId" defaultValue={cloudflare.accountId ?? ""} disabled={isReplica && !cloudflareOverride} className="h-8 text-sm font-mono" />
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="cf-fetchIps"
+              name="fetchCloudflareIps"
+              defaultChecked={cloudflare.fetchCloudflareIps ?? false}
+              disabled={isReplica && !cloudflareOverride}
+            />
+            <Label htmlFor="cf-fetchIps">
+              Fetch Cloudflare IP ranges from their public API{" "}
+              <span className="text-xs text-muted-foreground">(for WAF muted sources preset — uses hardcoded fallback when disabled)</span>
+            </Label>
           </div>
           <div className="flex justify-end">
             <Button type="submit" size="sm">Save Cloudflare settings</Button>

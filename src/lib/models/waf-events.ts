@@ -1,6 +1,6 @@
 import db from "../db";
 import { wafEvents } from "../db/schema";
-import { desc, like, or, count, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { desc, like, or, count, and, gte, lte, sql, inArray, eq } from "drizzle-orm";
 
 export type WafEvent = {
   id: number;
@@ -15,6 +15,7 @@ export type WafEvent = {
   severity: string | null;
   rawData: string | null;
   blocked: boolean;
+  muted: boolean;
 };
 
 function buildSearch(search?: string) {
@@ -27,11 +28,26 @@ function buildSearch(search?: string) {
   );
 }
 
-export async function countWafEvents(search?: string): Promise<number> {
+export async function countWafEvents(search?: string, includeMuted = false): Promise<number> {
+  const conditions = [];
+  const searchCond = buildSearch(search);
+  if (searchCond) conditions.push(searchCond);
+  if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const [row] = await db
     .select({ value: count() })
     .from(wafEvents)
-    .where(buildSearch(search));
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+  return row?.value ?? 0;
+}
+
+export async function countMutedWafEvents(search?: string): Promise<number> {
+  const conditions = [eq(wafEvents.muted, true)];
+  const searchCond = buildSearch(search);
+  if (searchCond) conditions.push(searchCond);
+  const [row] = await db
+    .select({ value: count() })
+    .from(wafEvents)
+    .where(and(...conditions));
   return row?.value ?? 0;
 }
 
@@ -115,11 +131,15 @@ export async function getWafRuleMessages(ruleIds: number[]): Promise<Record<numb
   );
 }
 
-export async function listWafEvents(limit = 50, offset = 0, search?: string): Promise<WafEvent[]> {
+export async function listWafEvents(limit = 50, offset = 0, search?: string, includeMuted = false): Promise<WafEvent[]> {
+  const conditions = [];
+  const searchCond = buildSearch(search);
+  if (searchCond) conditions.push(searchCond);
+  if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const rows = await db
     .select()
     .from(wafEvents)
-    .where(buildSearch(search))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(wafEvents.ts))
     .limit(limit)
     .offset(offset);
@@ -137,5 +157,6 @@ export async function listWafEvents(limit = 50, offset = 0, search?: string): Pr
     severity: r.severity ?? null,
     rawData: r.rawData ?? null,
     blocked: r.blocked ?? true,
+    muted: r.muted ?? false,
   }));
 }

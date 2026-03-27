@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import WafEventsClient from "./WafEventsClient";
-import { listWafEvents, countWafEvents, getWafRuleMessages } from "@/src/lib/models/waf-events";
+import { listWafEvents, countWafEvents, countMutedWafEvents, getWafRuleMessages } from "@/src/lib/models/waf-events";
 import { getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts } from "@/src/lib/models/proxy-hosts";
 import { listWafRuleSets } from "@/src/lib/models/waf-rule-sets";
@@ -10,19 +10,21 @@ import { requireAdmin } from "@/src/lib/auth";
 const PER_PAGE = 50;
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; search?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; include_muted?: string }>;
 }
 
 export default async function WafPage({ searchParams }: PageProps) {
   await requireAdmin();
-  const { page: pageParam, search: searchParam } = await searchParams;
+  const { page: pageParam, search: searchParam, include_muted } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const search = searchParam?.trim() || undefined;
+  const includeMuted = include_muted === "1";
   const offset = (page - 1) * PER_PAGE;
 
-  const [events, total, globalWaf, hosts, ruleSets] = await Promise.all([
-    listWafEvents(PER_PAGE, offset, search),
-    countWafEvents(search),
+  const [events, total, mutedCount, globalWaf, hosts, ruleSets] = await Promise.all([
+    listWafEvents(PER_PAGE, offset, search, includeMuted),
+    countWafEvents(search, includeMuted),
+    countMutedWafEvents(search),
     getWafSettings(),
     listProxyHosts(),
     listWafRuleSets(),
@@ -44,6 +46,8 @@ export default async function WafPage({ searchParams }: PageProps) {
       events={events}
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
+      initialIncludeMuted={includeMuted}
+      mutedCount={mutedCount}
       globalExcluded={globalExcludedIds}
       globalExcludedMessages={globalExcludedMessages}
       globalWafEnabled={globalWaf?.enabled ?? false}

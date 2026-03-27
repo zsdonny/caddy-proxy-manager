@@ -32,6 +32,7 @@ function event(overrides: Partial<WafEvent> & { id: number }): WafEvent {
     severity: null,
     rawData: null,
     blocked: false,
+    muted: false,
     ...overrides,
   };
 }
@@ -164,6 +165,8 @@ export const WithEvents: Story = {
     events: mockEvents,
     pagination: { total: 47, page: 1, perPage: 10 },
     initialSearch: '',
+    initialIncludeMuted: false,
+    mutedCount: 0,
     globalExcluded: [],
     globalExcludedMessages: {},
     globalWafEnabled: true,
@@ -179,6 +182,8 @@ export const WithExclusions: Story = {
     events: mockEvents,
     pagination: { total: 47, page: 1, perPage: 10 },
     initialSearch: '',
+    initialIncludeMuted: false,
+    mutedCount: 0,
     globalExcluded: [932160],
     globalExcludedMessages: { 932160: 'Remote Command Execution: Unix Shell Code Found' },
     globalWafEnabled: true,
@@ -196,6 +201,8 @@ export const Empty: Story = {
     events: [],
     pagination: { total: 0, page: 1, perPage: 10 },
     initialSearch: '',
+    initialIncludeMuted: false,
+    mutedCount: 0,
     globalExcluded: [],
     globalExcludedMessages: {},
     globalWafEnabled: false,
@@ -211,6 +218,8 @@ export const SecLangErrors: Story = {
     events: mockEvents.slice(0, 2),
     pagination: { total: 2, page: 1, perPage: 10 },
     initialSearch: '',
+    initialIncludeMuted: false,
+    mutedCount: 0,
     globalExcluded: [],
     globalExcludedMessages: {},
     globalWafEnabled: true,
@@ -227,5 +236,79 @@ export const SecLangErrors: Story = {
       excludedRules: [],
     },
     ruleSets: [],
+  },
+};
+
+export const WithMutedEvents: Story = {
+  name: 'With muted events visible',
+  args: {
+    events: [
+      ...mockEvents.slice(0, 3),
+      event({
+        id: 10,
+        host: 'app.example.com',
+        clientIp: '173.245.48.12',
+        countryCode: 'US',
+        method: 'GET',
+        uri: '/cdn-cgi/trace',
+        ruleId: 920350,
+        ruleMessage: 'Host header is a numeric IP address',
+        severity: 'WARNING',
+        blocked: false,
+        muted: true,
+      }),
+      event({
+        id: 11,
+        host: 'api.example.com',
+        clientIp: '108.162.192.1',
+        countryCode: 'US',
+        method: 'GET',
+        uri: '/health',
+        ruleId: 920280,
+        ruleMessage: 'Request Missing a Host Header',
+        severity: 'NOTICE',
+        blocked: false,
+        muted: true,
+      }),
+    ],
+    pagination: { total: 5, page: 1, perPage: 10 },
+    initialSearch: '',
+    initialIncludeMuted: true,
+    mutedCount: 2,
+    globalExcluded: [],
+    globalExcludedMessages: {},
+    globalWafEnabled: true,
+    hostWafMap: {},
+    globalWaf: {
+      ...defaultGlobalWaf,
+      muted_sources: {
+        cidrs: ['173.245.48.0/20', '108.162.192.0/18'],
+        ua_patterns: ['CloudFlare-*'],
+      },
+    },
+    ruleSets: mockRuleSets,
+  },
+};
+
+export const MutedSourcesSettings: Story = {
+  name: 'Muted sources — settings tab with CIDRs and UA patterns',
+  args: {
+    events: mockEvents.slice(0, 2),
+    pagination: { total: 2, page: 1, perPage: 10 },
+    initialSearch: '',
+    initialIncludeMuted: false,
+    mutedCount: 12,
+    globalExcluded: [],
+    globalExcludedMessages: {},
+    globalWafEnabled: true,
+    hostWafMap: {},
+    globalWaf: {
+      ...defaultGlobalWaf,
+      muted_sources: {
+        cidrs: ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '108.162.192.0/18'],
+        ua_patterns: ['CloudFlare-*', '*UptimeRobot*'],
+      },
+    },
+    ruleSets: mockRuleSets,
   },
 };

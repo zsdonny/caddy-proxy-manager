@@ -262,10 +262,12 @@ export const wafEvents = sqliteTable(
     severity: text('severity'),
     rawData: text('raw_data'),
     blocked: integer('blocked', { mode: 'boolean' }).notNull().default(true),
+    muted: integer('muted', { mode: 'boolean' }).notNull().default(false),
   },
   (table) => ({
     tsIdx: index('idx_waf_events_ts').on(table.ts),
     hostTsIdx: index('idx_waf_events_host_ts').on(table.host, table.ts),
+    mutedTsIdx: index('idx_waf_events_muted_ts').on(table.muted, table.ts),
   })
 );
 

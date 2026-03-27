@@ -87,11 +87,13 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
     const apiToken = clearToken ? "" : rawToken || current?.apiToken || "";
     const zoneId = formData.get("zoneId") ? String(formData.get("zoneId")) : undefined;
     const accountId = formData.get("accountId") ? String(formData.get("accountId")) : undefined;
+    const fetchCloudflareIps = formData.get("fetchCloudflareIps") === "on";
 
     await saveCloudflareSettings({
       apiToken,
       zoneId: zoneId && zoneId.length > 0 ? zoneId : undefined,
-      accountId: accountId && accountId.length > 0 ? accountId : undefined
+      accountId: accountId && accountId.length > 0 ? accountId : undefined,
+      fetchCloudflareIps
     });
 
     // Try to apply the config, but don't fail if Caddy is unreachable
@@ -739,6 +741,22 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
     }
 
     const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives, excluded_rule_ids, rule_set_ids };
+
+    // Parse muted sources
+    const rawMutedCidrs = formData.get("muted_cidrs");
+    const rawMutedUa = formData.get("muted_ua_patterns");
+    if (rawMutedCidrs !== null || rawMutedUa !== null) {
+      const cidrs = rawMutedCidrs !== null
+        ? (JSON.parse(rawMutedCidrs as string) as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
+        : [];
+      const ua_patterns = rawMutedUa !== null
+        ? (JSON.parse(rawMutedUa as string) as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
+        : [];
+      if (cidrs.length > 0 || ua_patterns.length > 0) {
+        config.muted_sources = { cidrs, ua_patterns };
+      }
+    }
+
     await saveWafSettings(config);
 
     try {

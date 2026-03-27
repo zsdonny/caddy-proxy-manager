@@ -51,7 +51,8 @@ export default async function SettingsPage() {
       cloudflare={{
         hasToken: Boolean(cloudflare?.apiToken),
         zoneId: cloudflare?.zoneId,
-        accountId: cloudflare?.accountId
+        accountId: cloudflare?.accountId,
+        fetchCloudflareIps: !!cloudflare?.fetchCloudflareIps
       }}
       authentik={authentik}
       metrics={metrics}

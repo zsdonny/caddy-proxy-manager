@@ -4,7 +4,9 @@ import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
 import { wafEvents, wafLogParseState } from './db/schema';
 import { eq } from 'drizzle-orm';
-import { getRetentionSettings } from './settings';
+import { getRetentionSettings, getWafSettings } from './settings';
+import type { WafSettings } from './settings';
+import { isIpInAnyCidr } from './cidr';
 
 const AUDIT_LOG = '/logs/waf-audit.log';
 const RULES_LOG = '/logs/waf-rules.log';
@@ -20,6 +22,45 @@ let geoReader: Awaited<ReturnType<typeof maxmind.open<CountryResponse>>> | null 
 const geoCache = new Map<string, string | null>();
 
 let stopped = false;
+
+// Muted sources cache (refreshed every 60s)
+let cachedMutedSources: WafSettings['muted_sources'] | null = null;
+let mutedSourcesLastRefresh = 0;
+const MUTED_SOURCES_TTL_MS = 60_000;
+
+async function getMutedSources(): Promise<WafSettings['muted_sources'] | undefined> {
+  const now = Date.now();
+  if (cachedMutedSources !== null && now - mutedSourcesLastRefresh < MUTED_SOURCES_TTL_MS) {
+    return cachedMutedSources ?? undefined;
+  }
+  try {
+    const waf = await getWafSettings();
+    cachedMutedSources = waf?.muted_sources ?? null;
+    mutedSourcesLastRefresh = now;
+    return cachedMutedSources ?? undefined;
+  } catch {
+    return cachedMutedSources ?? undefined;
+  }
+}
+
+function matchesUaPattern(ua: string, pattern: string): boolean {
+  // Simple glob matching: * = any chars
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  try {
+    return new RegExp(`^${escaped}$`, 'i').test(ua);
+  } catch {
+    return false;
+  }
+}
+
+function isSourceMuted(clientIp: string, userAgent: string, mutedSources: WafSettings['muted_sources']): boolean {
+  if (!mutedSources) return false;
+  if (mutedSources.cidrs.length > 0 && isIpInAnyCidr(clientIp, mutedSources.cidrs)) return true;
+  if (mutedSources.ua_patterns.length > 0 && userAgent) {
+    return mutedSources.ua_patterns.some((p) => matchesUaPattern(userAgent, p));
+  }
+  return false;
+}
 
 // ── state helpers ─────────────────────────────────────────────────────────────
 
@@ -135,7 +176,7 @@ interface CorazaAuditEntry {
   };
 }
 
-function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEvents.$inferInsert | null {
+function parseLine(line: string, ruleMap: Map<string, RuleInfo>, mutedSources?: WafSettings['muted_sources']): typeof wafEvents.$inferInsert | null {
   let entry: CorazaAuditEntry;
   try {
     entry = JSON.parse(line);
@@ -165,6 +206,10 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
   const hostArr = req.headers?.['host'] ?? req.headers?.['Host'];
   const host = Array.isArray(hostArr) ? (hostArr[0] ?? '') : (hostArr ?? '');
 
+  // User-Agent header for muted source matching
+  const uaArr = req.headers?.['user-agent'] ?? req.headers?.['User-Agent'];
+  const userAgent = Array.isArray(uaArr) ? (uaArr[0] ?? '') : (uaArr ?? '');
+
   // Look up rule info from the WAF rules log via the transaction unique_id
   const ruleInfo = tx.id ? ruleMap.get(tx.id) : undefined;
 
@@ -173,6 +218,8 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
   // Only store events where a specific rule matched or the request was blocked.
   // Audit log entries without any rule match are clean requests and can be discarded.
   if (!blocked && !ruleInfo) return null;
+
+  const muted = isSourceMuted(clientIp, userAgent, mutedSources);
 
   return {
     ts,
@@ -186,6 +233,7 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
     severity: ruleInfo?.severity ?? null,
     rawData: line,
     blocked,
+    muted,
   };
 }
 
@@ -286,6 +334,9 @@ export async function parseNewWafLogEntries(): Promise<void> {
   if (!existsSync(AUDIT_LOG)) return;
 
   try {
+    // ── 0. Load muted sources configuration ──────────────────────────────────
+    const mutedSources = await getMutedSources();
+
     // ── 1. Parse WAF rules log to build unique_id → rule info map ────────────
     const rulesOffset = parseInt(getState('waf_rules_log_offset') ?? '0', 10);
     const rulesSize = parseInt(getState('waf_rules_log_size') ?? '0', 10);
@@ -316,7 +367,7 @@ export async function parseNewWafLogEntries(): Promise<void> {
 
     if (lines.length > 0) {
       const t0 = performance.now();
-      const rows = lines.map(l => parseLine(l, ruleMap)).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
+      const rows = lines.map(l => parseLine(l, ruleMap, mutedSources)).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
       const tParse = performance.now();
       if (rows.length > 0) {
         insertBatch(rows);
