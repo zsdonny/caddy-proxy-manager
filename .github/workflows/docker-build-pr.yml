@@ -35,6 +35,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Clear stale Docker Hub credentials
+        run: docker logout docker.io 2>/dev/null || true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
