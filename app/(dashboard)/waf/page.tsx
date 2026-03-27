@@ -4,6 +4,7 @@ import WafEventsClient from "./WafEventsClient";
 import { listWafEvents, countWafEvents, getWafRuleMessages } from "@/src/lib/models/waf-events";
 import { getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts } from "@/src/lib/models/proxy-hosts";
+import { listWafRuleSets } from "@/src/lib/models/waf-rule-sets";
 import { requireAdmin } from "@/src/lib/auth";
 
 const PER_PAGE = 50;
@@ -19,11 +20,12 @@ export default async function WafPage({ searchParams }: PageProps) {
   const search = searchParam?.trim() || undefined;
   const offset = (page - 1) * PER_PAGE;
 
-  const [events, total, globalWaf, hosts] = await Promise.all([
+  const [events, total, globalWaf, hosts, ruleSets] = await Promise.all([
     listWafEvents(PER_PAGE, offset, search),
     countWafEvents(search),
     getWafSettings(),
     listProxyHosts(),
+    listWafRuleSets(),
   ]);
 
   const globalExcludedIds = globalWaf?.excluded_rule_ids ?? [];
@@ -47,6 +49,7 @@ export default async function WafPage({ searchParams }: PageProps) {
       globalWafEnabled={globalWaf?.enabled ?? false}
       hostWafMap={hostWafMap}
       globalWaf={globalWaf ?? null}
+      ruleSets={ruleSets}
     />
   );
 }

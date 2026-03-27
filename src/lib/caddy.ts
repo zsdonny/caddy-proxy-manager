@@ -54,6 +54,7 @@ import {
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
+import { getWafRuleSetsById } from "./models/waf-rule-sets";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -695,6 +696,14 @@ async function buildProxyRoutes(
       meta.waf
     );
     if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
+      // Prepend rule set directives before custom_directives
+      if (effectiveWaf.rule_set_ids?.length) {
+        const ruleSets = await getWafRuleSetsById(effectiveWaf.rule_set_ids);
+        const ruleSetDirectives = ruleSets.map(rs => rs.directives).filter(Boolean).join('\n');
+        if (ruleSetDirectives) {
+          effectiveWaf.custom_directives = [ruleSetDirectives, effectiveWaf.custom_directives].filter(Boolean).join('\n');
+        }
+      }
       handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allow_websocket)));
     }
 

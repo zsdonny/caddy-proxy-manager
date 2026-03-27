@@ -337,6 +337,11 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
     ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
     : [];
 
+  const rawRuleSets = formData.get("waf_rule_set_ids");
+  const rule_set_ids: number[] = rawRuleSets
+    ? (JSON.parse(rawRuleSets as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
+    : [];
+
   return {
     waf: {
       enabled,
@@ -344,6 +349,7 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
       load_owasp_crs: loadCrs,
       custom_directives: customDirectives,
       excluded_rule_ids,
+      rule_set_ids,
       waf_mode: wafMode,
     }
   };

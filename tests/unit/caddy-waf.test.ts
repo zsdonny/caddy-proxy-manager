@@ -446,3 +446,65 @@ describe('validateSecLangDirectives', () => {
     expect(issues.every((i) => i.severity === 'error')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// resolveEffectiveWaf — rule_set_ids merging
+// ---------------------------------------------------------------------------
+
+describe('resolveEffectiveWaf — rule_set_ids', () => {
+  it('passes through global rule_set_ids when host is null', () => {
+    const global = { ...globalWaf, rule_set_ids: [1, 2] };
+    const result = resolveEffectiveWaf(global, null);
+    expect(result!.rule_set_ids).toEqual([1, 2]);
+  });
+
+  it('passes through host rule_set_ids in override mode', () => {
+    const result = resolveEffectiveWaf(globalWaf, {
+      enabled: true,
+      waf_mode: 'override',
+      mode: 'On',
+      rule_set_ids: [3, 4],
+    });
+    expect(result!.rule_set_ids).toEqual([3, 4]);
+  });
+
+  it('does not include global rule_set_ids in override mode', () => {
+    const global = { ...globalWaf, rule_set_ids: [1, 2] };
+    const result = resolveEffectiveWaf(global, {
+      enabled: true,
+      waf_mode: 'override',
+      mode: 'On',
+      rule_set_ids: [3],
+    });
+    expect(result!.rule_set_ids).toEqual([3]);
+    expect(result!.rule_set_ids).not.toContain(1);
+  });
+
+  it('merges global and host rule_set_ids in merge mode with dedup', () => {
+    const global = { ...globalWaf, rule_set_ids: [1, 2] };
+    const result = resolveEffectiveWaf(global, {
+      enabled: true,
+      waf_mode: 'merge',
+      rule_set_ids: [2, 3],
+    });
+    expect(result!.rule_set_ids).toEqual(expect.arrayContaining([1, 2, 3]));
+    expect(result!.rule_set_ids).toHaveLength(3);
+  });
+
+  it('handles missing rule_set_ids on both sides in merge mode', () => {
+    const result = resolveEffectiveWaf(globalWaf, {
+      enabled: true,
+      waf_mode: 'merge',
+    });
+    expect(result!.rule_set_ids).toEqual([]);
+  });
+
+  it('host-only WAF (no global) preserves rule_set_ids', () => {
+    const result = resolveEffectiveWaf(null, {
+      enabled: true,
+      mode: 'On',
+      rule_set_ids: [5],
+    });
+    expect(result!.rule_set_ids).toEqual([5]);
+  });
+});

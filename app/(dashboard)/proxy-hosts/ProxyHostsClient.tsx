@@ -15,6 +15,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/components/proxy-hosts/HostDialogs";
+import type { RuleSetItem } from "@/src/components/waf/RuleSetDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -42,6 +43,7 @@ type Props = {
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
   initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
+  ruleSets?: RuleSetItem[];
 };
 
 function getGeoLabel(host: ProxyHost): string | null {
@@ -144,7 +146,7 @@ function getProxyHostFeatures(host: ProxyHost): Set<ProxyFeatureKey> {
   return f;
 }
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort, ruleSets = [] }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
@@ -444,6 +446,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         accessLists={accessLists}
         authentikDefaults={authentikDefaults}
         caCertificates={caCertificates}
+        ruleSets={ruleSets}
       />
 
       {editHost && (
@@ -454,6 +457,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           certificates={certificates}
           accessLists={accessLists}
           caCertificates={caCertificates}
+          ruleSets={ruleSets}
         />
       )}
 

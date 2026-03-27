@@ -296,3 +296,37 @@ export const ToggleOffOnPreservesEngineMode: Story = {
     expect(wafModeInput?.value).toBe('override');
   },
 };
+
+export const WithRuleSets: Story = {
+  name: 'With Rule Sets selector',
+  args: {
+    value: {
+      enabled: true,
+      mode: 'On',
+      load_owasp_crs: true,
+      waf_mode: 'merge',
+      custom_directives: '',
+      rule_set_ids: [1],
+    },
+    ruleSets: [
+      {
+        id: 1,
+        name: 'WordPress Relaxation',
+        description: 'Relaxes OWASP CRS rules for WordPress admin and REST API.',
+        directives: 'SecRuleRemoveById 941100',
+        isPreset: true,
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+      {
+        id: 2,
+        name: 'My Custom Rules',
+        description: null,
+        directives: 'SecRule ARGS "evil" "id:9001,deny"',
+        isPreset: false,
+        createdAt: '2026-03-25T10:00:00Z',
+        updatedAt: '2026-03-26T12:00:00Z',
+      },
+    ],
+  },
+};

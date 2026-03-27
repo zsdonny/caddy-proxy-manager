@@ -9,6 +9,7 @@ import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
+import { createWafRuleSet, updateWafRuleSet, deleteWafRuleSet } from "@/src/lib/models/waf-rule-sets";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
 type ActionResult = {
@@ -727,7 +728,17 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
       excluded_rule_ids = existing?.excluded_rule_ids ?? [];
     }
 
-    const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives, excluded_rule_ids };
+    const rawRuleSets = formData.get("waf_rule_set_ids");
+    let rule_set_ids: number[] | undefined;
+    if (rawRuleSets !== null) {
+      rule_set_ids = (JSON.parse(rawRuleSets as string) as unknown[])
+        .filter((x): x is number => Number.isInteger(x) && (x as number) > 0);
+    } else {
+      const existing = await getWafSettings();
+      rule_set_ids = existing?.rule_set_ids;
+    }
+
+    const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives, excluded_rule_ids, rule_set_ids };
     await saveWafSettings(config);
 
     try {
@@ -762,5 +773,70 @@ export async function updateRetentionSettingsAction(_prevState: ActionResult | n
   } catch (error) {
     console.error("Failed to save retention settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save retention settings" };
+  }
+}
+
+export async function createWafRuleSetAction(data: { name: string; description: string; directives: string }): Promise<ActionResult & { id?: number }> {
+  try {
+    await requireAdmin();
+    if (!data.name.trim()) return { success: false, message: "Name is required" };
+    if (!data.directives.trim()) return { success: false, message: "Directives are required" };
+
+    const secLangErrors = validateSecLangDirectives(data.directives).filter(i => i.severity === 'error');
+    if (secLangErrors.length > 0) {
+      const detail = secLangErrors.map(e => `Line ${e.line}: ${e.message}`).join('; ');
+      return { success: false, message: `Directives contain unsupported Coraza directives: ${detail}` };
+    }
+
+    const ruleSet = await createWafRuleSet({
+      name: data.name.trim(),
+      description: data.description.trim(),
+      directives: data.directives.trim(),
+    });
+    revalidatePath("/waf");
+    return { success: true, message: "Rule set created", id: ruleSet.id };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) {
+      return { success: false, message: "A rule set with that name already exists" };
+    }
+    return { success: false, message: error instanceof Error ? error.message : "Failed to create rule set" };
+  }
+}
+
+export async function updateWafRuleSetAction(id: number, data: { name: string; description: string; directives: string }): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    if (!data.name.trim()) return { success: false, message: "Name is required" };
+    if (!data.directives.trim()) return { success: false, message: "Directives are required" };
+
+    const secLangErrors = validateSecLangDirectives(data.directives).filter(i => i.severity === 'error');
+    if (secLangErrors.length > 0) {
+      const detail = secLangErrors.map(e => `Line ${e.line}: ${e.message}`).join('; ');
+      return { success: false, message: `Directives contain unsupported Coraza directives: ${detail}` };
+    }
+
+    await updateWafRuleSet(id, {
+      name: data.name.trim(),
+      description: data.description.trim(),
+      directives: data.directives.trim(),
+    });
+    revalidatePath("/waf");
+    return { success: true, message: "Rule set updated" };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) {
+      return { success: false, message: "A rule set with that name already exists" };
+    }
+    return { success: false, message: error instanceof Error ? error.message : "Failed to update rule set" };
+  }
+}
+
+export async function deleteWafRuleSetAction(id: number): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    await deleteWafRuleSet(id);
+    revalidatePath("/waf");
+    return { success: true, message: "Rule set deleted" };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to delete rule set" };
   }
 }

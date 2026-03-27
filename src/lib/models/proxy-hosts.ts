@@ -43,6 +43,7 @@ export type WafHostConfig = {
   load_owasp_crs?: boolean;
   custom_directives?: string;
   excluded_rule_ids?: number[];
+  rule_set_ids?: number[];
   waf_mode?: WafMode;
 };
 

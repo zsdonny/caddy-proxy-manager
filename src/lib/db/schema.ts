@@ -274,6 +274,22 @@ export const wafLogParseState = sqliteTable('waf_log_parse_state', {
   value: text('value').notNull(),
 });
 
+export const wafRuleSets = sqliteTable(
+  'waf_rule_sets',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    description: text('description'),
+    directives: text('directives').notNull(),
+    isPreset: integer('is_preset', { mode: 'boolean' }).notNull().default(false),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    nameUnique: uniqueIndex('waf_rule_sets_name_unique').on(table.name),
+  })
+);
+
 export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

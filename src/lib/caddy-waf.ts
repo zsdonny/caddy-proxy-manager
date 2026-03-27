@@ -147,6 +147,7 @@ export function resolveEffectiveWaf(
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
       excluded_rule_ids: host.excluded_rule_ids,
+      rule_set_ids: host.rule_set_ids,
     };
   }
 
@@ -163,6 +164,10 @@ export function resolveEffectiveWaf(
         ...(global.excluded_rule_ids ?? []),
         ...(host.excluded_rule_ids ?? []),
       ],
+      rule_set_ids: [...new Set([
+        ...(global.rule_set_ids ?? []),
+        ...(host.rule_set_ids ?? []),
+      ])],
     };
   }
 
@@ -173,6 +178,7 @@ export function resolveEffectiveWaf(
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
       excluded_rule_ids: host.excluded_rule_ids,
+      rule_set_ids: host.rule_set_ids,
     };
   }
   if (global?.enabled) return global;

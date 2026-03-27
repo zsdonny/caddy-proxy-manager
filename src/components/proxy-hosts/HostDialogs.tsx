@@ -28,6 +28,7 @@ import { MtlsFields } from "./MtlsConfig";
 import { RedirectsFields } from "./RedirectsFields";
 import { RewriteFields } from "./RewriteFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
+import type { RuleSetItem } from "@/src/components/waf/RuleSetDialog";
 
 export function CreateHostDialog({
     open,
@@ -36,7 +37,8 @@ export function CreateHostDialog({
     accessLists,
     authentikDefaults,
     initialData,
-    caCertificates = []
+    caCertificates = [],
+    ruleSets = []
 }: {
     open: boolean;
     onClose: () => void;
@@ -45,6 +47,7 @@ export function CreateHostDialog({
     authentikDefaults: AuthentikSettings | null;
     initialData?: ProxyHost | null;
     caCertificates?: CaCertificate[];
+    ruleSets?: RuleSetItem[];
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
@@ -176,7 +179,7 @@ export function CreateHostDialog({
                         geoblock_mode: initialData.geoblock_mode,
                     } : undefined}
                 />
-                <WafFields value={initialData?.waf} />
+                <WafFields value={initialData?.waf} ruleSets={ruleSets} />
                 <MtlsFields value={initialData?.mtls} caCertificates={caCertificates} />
             </form>
         </AppDialog>
@@ -189,7 +192,8 @@ export function EditHostDialog({
     onClose,
     certificates,
     accessLists,
-    caCertificates = []
+    caCertificates = [],
+    ruleSets = []
 }: {
     open: boolean;
     host: ProxyHost;
@@ -197,6 +201,7 @@ export function EditHostDialog({
     certificates: Certificate[];
     accessLists: AccessList[];
     caCertificates?: CaCertificate[];
+    ruleSets?: RuleSetItem[];
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
@@ -318,7 +323,7 @@ export function EditHostDialog({
                         geoblock_mode: host.geoblock_mode,
                     }}
                 />
-                <WafFields value={host.waf} />
+                <WafFields value={host.waf} ruleSets={ruleSets} />
                 <MtlsFields value={host.mtls} caCertificates={caCertificates} />
             </form>
         </AppDialog>

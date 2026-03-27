@@ -10,6 +10,8 @@ import { useMemo, useState } from "react";
 import { validateSecLangDirectives } from "@/lib/caddy-waf";
 import { type WafHostConfig } from "@/lib/models/proxy-hosts";
 import { WafRuleExclusions } from "./WafRuleExclusions";
+import { RuleSetSelector } from "@/src/components/waf/RuleSetSelector";
+import type { RuleSetItem } from "@/src/components/waf/RuleSetDialog";
 
 type WafMode = "merge" | "override";
 type EngineMode = "Off" | "On" | "inherit";
@@ -24,9 +26,10 @@ const QUICK_TEMPLATES = [
 type Props = {
   value?: WafHostConfig | null;
   showModeSelector?: boolean;
+  ruleSets?: RuleSetItem[];
 };
 
-export function WafFields({ value, showModeSelector = true }: Props) {
+export function WafFields({ value, showModeSelector = true, ruleSets = [] }: Props) {
   const [enabled, setEnabled] = useState(value?.enabled ?? false);
   const [wafMode, setWafMode] = useState<WafMode>(value?.waf_mode ?? "merge");
   const [engineMode, setEngineMode] = useState<EngineMode>(
@@ -35,6 +38,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
   const [loadCrs, setLoadCrs] = useState(value?.load_owasp_crs ?? true);
   const [customDirectives, setCustomDirectives] = useState(value?.custom_directives ?? "");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [selectedRuleSets, setSelectedRuleSets] = useState<number[]>(value?.rule_set_ids ?? []);
 
   const secLangIssues = useMemo(() => validateSecLangDirectives(customDirectives), [customDirectives]);
   const hasSecLangErrors = secLangIssues.some((i) => i.severity === "error");
@@ -150,6 +154,18 @@ export function WafFields({ value, showModeSelector = true }: Props) {
         <div className="mt-4">
           <WafRuleExclusions value={value?.excluded_rule_ids} />
         </div>
+
+        {/* Rule Sets */}
+        {ruleSets.length > 0 && (
+          <div className="mt-4">
+            <RuleSetSelector
+              ruleSets={ruleSets}
+              selected={selectedRuleSets}
+              onChange={setSelectedRuleSets}
+              inputName="waf_rule_set_ids"
+            />
+          </div>
+        )}
 
         {/* Custom directives */}
         <div className="mt-4">

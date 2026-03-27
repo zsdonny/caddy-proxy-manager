@@ -223,6 +223,7 @@ export type WafSettings = {
   load_owasp_crs: boolean;
   custom_directives: string;
   excluded_rule_ids?: number[];
+  rule_set_ids?: number[];
 };
 
 export async function getWafSettings(): Promise<WafSettings | null> {

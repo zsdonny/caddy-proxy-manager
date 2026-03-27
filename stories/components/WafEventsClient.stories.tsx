@@ -136,6 +136,7 @@ export const WithEvents: Story = {
     globalWafEnabled: true,
     hostWafMap: {},
     globalWaf: defaultGlobalWaf,
+    ruleSets: [],
   },
 };
 
@@ -152,6 +153,7 @@ export const WithExclusions: Story = {
       'api.example.com': [942100],
     },
     globalWaf: defaultGlobalWaf,
+    ruleSets: [],
   },
 };
 
@@ -166,6 +168,7 @@ export const Empty: Story = {
     globalWafEnabled: false,
     hostWafMap: {},
     globalWaf: null,
+    ruleSets: [],
   },
 };
 
@@ -190,5 +193,6 @@ export const SecLangErrors: Story = {
       ].join('\n'),
       excludedRules: [],
     },
+    ruleSets: [],
   },
 };

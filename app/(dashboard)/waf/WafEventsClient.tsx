@@ -25,6 +25,9 @@ import { DataTable } from "@/components/ui/DataTable";
 import type { WafEvent } from "@/lib/models/waf-events";
 import type { WafSettings } from "@/lib/settings";
 import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
+import { RuleLibraryTab } from "@/src/components/waf/RuleLibraryTab";
+import { RuleSetSelector } from "@/src/components/waf/RuleSetSelector";
+import type { RuleSetItem } from "@/src/components/waf/RuleSetDialog";
 import {
   suppressWafRuleGloballyAction,
   suppressWafRuleForHostAction,
@@ -42,6 +45,7 @@ type Props = {
   globalWafEnabled: boolean;
   hostWafMap: Record<string, number[]>;
   globalWaf: WafSettings | null;
+  ruleSets: RuleSetItem[];
 };
 
 const SEVERITY_CLASSES: Record<string, string> = {
@@ -422,7 +426,7 @@ function GlobalSuppressedRules({
   );
 }
 
-export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf }: Props) {
+export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf, ruleSets }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -435,6 +439,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
   const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates] = useState(false);
+  const [wafRuleSetIds, setWafRuleSetIds] = useState<number[]>(globalWaf?.rule_set_ids ?? []);
   const secLangIssues = useMemo(() => validateSecLangDirectives(wafCustomDirectives), [wafCustomDirectives]);
   const hasSecLangErrors = secLangIssues.some(i => i.severity === 'error');
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
@@ -581,6 +586,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="suppressed">Suppressed Rules</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="library">Rule Library</TabsTrigger>
         </TabsList>
 
         <TabsContent value="events" className="flex flex-col gap-4">
@@ -652,6 +658,12 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
                 </Label>
               </div>
               {/* WafRuleExclusions intentionally omitted — managed in Suppressed Rules tab */}
+              <RuleSetSelector
+                ruleSets={ruleSets}
+                selected={wafRuleSetIds}
+                onChange={setWafRuleSetIds}
+                inputName="waf_rule_set_ids"
+              />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="waf_custom_directives">Custom SecLang Directives</Label>
                 <Textarea
@@ -724,6 +736,10 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
               </div>
             </form>
           </div>
+        </TabsContent>
+
+        <TabsContent value="library">
+          <RuleLibraryTab ruleSets={ruleSets} />
         </TabsContent>
       </Tabs>
     </div>

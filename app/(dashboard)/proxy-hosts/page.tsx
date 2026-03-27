@@ -6,6 +6,7 @@ import { listCertificates } from "@/src/lib/models/certificates";
 import { listCaCertificates } from "@/src/lib/models/ca-certificates";
 import { listAccessLists } from "@/src/lib/models/access-lists";
 import { getAuthentikSettings } from "@/src/lib/settings";
+import { listWafRuleSets } from "@/src/lib/models/waf-rule-sets";
 import { requireAdmin } from "@/src/lib/auth";
 const PER_PAGE = 25;
 
@@ -22,13 +23,14 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
   const sortBy = sortByParam || undefined;
   const sortDir = (sortDirParam === "asc" || sortDirParam === "desc") ? sortDirParam : "desc";
 
-  const [hosts, total, certificates, caCertificates, accessLists, authentikDefaults] = await Promise.all([
+  const [hosts, total, certificates, caCertificates, accessLists, authentikDefaults, ruleSets] = await Promise.all([
     listProxyHostsPaginated(PER_PAGE, offset, search, sortBy, sortDir),
     countProxyHosts(search),
     listCertificates(),
     listCaCertificates(),
     listAccessLists(),
     getAuthentikSettings(),
+    listWafRuleSets(),
   ]);
 
   return (
@@ -41,6 +43,7 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
       initialSort={{ sortBy: sortBy ?? "created_at", sortDir }}
+      ruleSets={ruleSets}
     />
   );
 }
