@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
+
+function truncName(name: string, max = 40): string {
+  return name.length > max ? name.slice(0, max) + "\u2026" : name;
+}
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import {
   createL4ProxyHost,
@@ -248,7 +252,7 @@ export async function createL4ProxyHostAction(
     await createL4ProxyHost(input, userId);
     revalidatePath("/l4-proxy-hosts");
     after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
-    return actionSuccess("L4 proxy host created and queued for Caddy reload.");
+    return actionSuccess(`L4 proxy host "${truncName(String(formData.get("name") ?? "Untitled"))}" created and queued for Caddy reload.`);
   } catch (error) {
     console.error("Failed to create L4 proxy host:", error);
     return actionError(error, "Failed to create L4 proxy host.");
@@ -304,7 +308,7 @@ export async function updateL4ProxyHostAction(
     await updateL4ProxyHost(id, input, userId);
     revalidatePath("/l4-proxy-hosts");
     after(() => applyCaddyConfig().catch((e) => console.error("[l4-actions] Caddy apply failed:", e)));
-    return actionSuccess("L4 proxy host updated.");
+    return actionSuccess(`L4 proxy host "${truncName(String(formData.get("name") ?? "Untitled"))}" updated.`);
   } catch (error) {
     console.error(`Failed to update L4 proxy host ${id}:`, error);
     return actionError(error, "Failed to update L4 proxy host.");

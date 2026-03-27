@@ -82,14 +82,30 @@ function GeoBlockBadge({ host }: { host: ProxyHost }) {
   );
 }
 
-function WafBadge({ host }: { host: ProxyHost }) {
+function WafBadge({ host, ruleSets = [] }: { host: ProxyHost; ruleSets?: RuleSetItem[] }) {
   if (!host.waf?.enabled) return null;
   const hasCustom = !!host.waf.custom_directives;
   const hasOverride = host.waf.waf_mode === "override";
-  const showDot = hasCustom || hasOverride;
-  const popoverLines: string[] = [];
-  if (hasOverride) popoverLines.push("Override global WAF");
-  if (hasCustom) popoverLines.push("Custom SecLang directives");
+  const selectedIds = host.waf.rule_set_ids ?? [];
+  const hasRuleSets = selectedIds.length > 0;
+  const showDot = hasCustom || hasOverride || hasRuleSets;
+  const popoverLines: React.ReactNode[] = [];
+  if (hasOverride) popoverLines.push(<p key="override" className="font-medium">Override global WAF</p>);
+  if (hasCustom) popoverLines.push(<p key="custom" className="font-medium">Custom SecLang directives</p>);
+  if (hasRuleSets) {
+    const resolved = selectedIds
+      .map((id) => ruleSets.find((rs) => rs.id === id))
+      .filter(Boolean) as RuleSetItem[];
+    const MAX_SHOWN = 1;
+    const shown = resolved.slice(0, MAX_SHOWN);
+    const remaining = resolved.length - MAX_SHOWN;
+    popoverLines.push(
+      <p key="rulesets" className="font-medium max-w-[220px]">
+        <span className="truncate block" title={shown[0]?.name}>{shown[0]?.name ?? "Rule set"}</span>
+        {remaining > 0 && <span className="text-muted-foreground"> and {remaining} more</span>}
+      </p>
+    );
+  }
   const badge = (
     <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 relative transition-all duration-150 hover:scale-110 hover:brightness-110">
       <ShieldAlert className="h-2.5 w-2.5 mr-0.5" />WAF
@@ -100,19 +116,19 @@ function WafBadge({ host }: { host: ProxyHost }) {
   return (
     <Popover>
       <PopoverTrigger asChild>{badge}</PopoverTrigger>
-      <PopoverContent className="w-auto p-2 text-xs space-y-0.5">
-        {popoverLines.map((line) => <p key={line} className="font-medium">{line}</p>)}
+      <PopoverContent className="w-auto max-w-[260px] p-2 text-xs space-y-0.5">
+        {popoverLines}
       </PopoverContent>
     </Popover>
   );
 }
 
-function ProxyFeatureBadges({ host }: { host: ProxyHost }) {
+function ProxyFeatureBadges({ host, ruleSets = [] }: { host: ProxyHost; ruleSets?: RuleSetItem[] }) {
   const badges: React.ReactNode[] = [];
   if (host.certificate_id) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
   if (host.access_list_id) badges.push(<Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" />Auth</Badge>);
   if (host.authentik?.enabled) badges.push(<Badge key="authentik" variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-500/30 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><KeyRound className="h-2.5 w-2.5 mr-0.5" />Authentik</Badge>);
-  if (host.waf?.enabled) badges.push(<WafBadge key="waf" host={host} />);
+  if (host.waf?.enabled) badges.push(<WafBadge key="waf" host={host} ruleSets={ruleSets} />);
   if (host.mtls?.enabled) badges.push(<Badge key="mtls" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><LockKeyhole className="h-2.5 w-2.5 mr-0.5" />mTLS</Badge>);
   if (host.geoblock?.enabled) badges.push(<GeoBlockBadge key="geo" host={host} />);
   if (host.load_balancer?.enabled) badges.push(<Badge key="lb" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Scale className="h-2.5 w-2.5 mr-0.5" />LB</Badge>);
@@ -318,7 +334,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       id: "features",
       label: "Features",
       headerContent: featuresHeaderContent,
-      render: (host: ProxyHost) => <ProxyFeatureBadges host={host} />,
+      render: (host: ProxyHost) => <ProxyFeatureBadges host={host} ruleSets={ruleSets} />,
     },
     {
       id: "status",
@@ -382,7 +398,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
             </p>
             <StatusChip status={host.enabled ? "active" : "inactive"} className="w-fit mt-1" />
             <div className="flex flex-wrap gap-1 mt-1">
-              <ProxyFeatureBadges host={host} />
+              <ProxyFeatureBadges host={host} ruleSets={ruleSets} />
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">

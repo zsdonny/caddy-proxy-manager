@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CircleX, AlertTriangle } from "lucide-react";
+import { CircleX, AlertTriangle, ChevronDown, ClipboardCopy } from "lucide-react";
 
 import { AppDialog } from "@/components/ui/AppDialog";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
 import { createWafRuleSetAction, updateWafRuleSetAction } from "@/app/(dashboard)/settings/actions";
+
+const QUICK_TEMPLATES = [
+  { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
+  { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
+  { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
+  { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
+];
 
 export type RuleSetItem = {
   id: number;
@@ -37,6 +44,7 @@ export function RuleSetDialog({ open, onClose, item }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const isPreset = !!item?.isPreset;
   const isEdit = !!item;
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const secLangIssues = useMemo(() => validateSecLangDirectives(directives), [directives]);
   const hasErrors = secLangIssues.some(i => i.severity === "error");
@@ -127,6 +135,42 @@ export function RuleSetDialog({ open, onClose, item }: Props) {
               ))}
             </div>
           )}
+        </div>
+        {/* Quick Templates */}
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTemplates((v) => !v)}
+            className="text-muted-foreground px-0 text-sm"
+          >
+            Quick Templates
+            <ChevronDown className={cn(
+              "h-4 w-4 ml-1 transition-transform duration-200",
+              showTemplates && "rotate-180"
+            )} />
+          </Button>
+          <div className={cn(
+            "overflow-hidden transition-all duration-200",
+            showTemplates ? "max-h-[500px] opacity-100 mt-2" : "max-h-0 opacity-0 pointer-events-none"
+          )}>
+            <div className="flex flex-col gap-1.5">
+              {QUICK_TEMPLATES.map((t) => (
+                <Button
+                  key={t.label}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                  className="justify-start font-mono text-[0.72rem]"
+                >
+                  <ClipboardCopy className="h-3 w-3 mr-1 shrink-0" />
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </form>

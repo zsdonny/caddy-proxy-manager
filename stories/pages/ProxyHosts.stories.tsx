@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { within, userEvent, expect } from 'storybook/test';
 import type { ProxyHost } from '../../src/lib/models/proxy-hosts';
+import type { RuleSetItem } from '../../src/components/waf/RuleSetDialog';
 import ProxyHostsClient from '../../app/(dashboard)/proxy-hosts/ProxyHostsClient';
 import { withDashboardLayout } from '../decorators';
 
@@ -18,6 +19,36 @@ export default meta;
 type Story = StoryObj<typeof ProxyHostsClient>;
 
 const now = new Date().toISOString();
+
+const mockRuleSets: RuleSetItem[] = [
+  {
+    id: 10,
+    name: 'WordPress Relaxation',
+    description: 'Relaxes OWASP CRS rules for WordPress admin and REST API.',
+    directives: 'SecRuleRemoveById 941100',
+    isPreset: true,
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 11,
+    name: 'Django / Python API',
+    description: 'Relaxes rules triggered by Django REST Framework.',
+    directives: 'SecRuleRemoveById 920420',
+    isPreset: true,
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 12,
+    name: 'My Super Long Custom Rule Set Name That Exceeds Normal Lengths',
+    description: null,
+    directives: 'SecRule ARGS "evil" "id:9001,deny"',
+    isPreset: false,
+    createdAt: now,
+    updatedAt: now,
+  },
+];
 
 const mockHosts: ProxyHost[] = [
   {
@@ -120,6 +151,64 @@ const mockHosts: ProxyHost[] = [
     mtls: null,
     redirects: [],
     rewrite: { path_prefix: '/api/v1' },
+  },
+  {
+    id: 7,
+    name: 'WordPress Blog',
+    domains: ['blog.example.com'],
+    upstreams: ['wordpress:80'],
+    certificate_id: 1,
+    access_list_id: null,
+    ssl_forced: true,
+    hsts_enabled: false,
+    hsts_subdomains: false,
+    allow_websocket: false,
+    preserve_host_header: false,
+    skip_https_hostname_validation: false,
+    enabled: true,
+    created_at: now,
+    updated_at: now,
+    custom_reverse_proxy_json: null,
+    custom_pre_handlers_json: null,
+    authentik: null,
+    load_balancer: null,
+    dns_resolver: null,
+    upstream_dns_resolution: null,
+    geoblock: null,
+    geoblock_mode: 'merge',
+    waf: { enabled: true, mode: 'On', load_owasp_crs: true, waf_mode: 'merge', rule_set_ids: [10] },
+    mtls: null,
+    redirects: [],
+    rewrite: null,
+  },
+  {
+    id: 8,
+    name: 'Multi-RuleSet App',
+    domains: ['multi.example.com'],
+    upstreams: ['multi:3000'],
+    certificate_id: 1,
+    access_list_id: null,
+    ssl_forced: true,
+    hsts_enabled: false,
+    hsts_subdomains: false,
+    allow_websocket: false,
+    preserve_host_header: false,
+    skip_https_hostname_validation: false,
+    enabled: true,
+    created_at: now,
+    updated_at: now,
+    custom_reverse_proxy_json: null,
+    custom_pre_handlers_json: null,
+    authentik: null,
+    load_balancer: null,
+    dns_resolver: null,
+    upstream_dns_resolution: null,
+    geoblock: null,
+    geoblock_mode: 'merge',
+    waf: { enabled: true, mode: 'On', load_owasp_crs: true, waf_mode: 'merge', rule_set_ids: [10, 11, 12] },
+    mtls: null,
+    redirects: [],
+    rewrite: null,
   },
   {
     id: 4,
@@ -253,9 +342,10 @@ export const Default: Story = {
     accessLists: [],
     caCertificates: [],
     authentikDefaults: null,
-    pagination: { total: 6, page: 1, perPage: 25 },
+    pagination: { total: mockHosts.length, page: 1, perPage: 25 },
     initialSearch: '',
     initialSort: { sortBy: 'name', sortDir: 'asc' },
+    ruleSets: mockRuleSets,
   },
 };
 

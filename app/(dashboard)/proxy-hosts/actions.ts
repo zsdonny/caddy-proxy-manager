@@ -23,6 +23,10 @@ import {
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
+
+function truncName(name: string, max = 40): string {
+  return name.length > max ? name.slice(0, max) + "\u2026" : name;
+}
 import {
   parseCsv,
   parseUpstreams,
@@ -522,9 +526,9 @@ export async function createProxyHostAction(
 
     // Return success with warning if applicable
     if (warning) {
-      return actionSuccess(`Proxy host created using Caddy Auto certificate management. ${warning}`);
+      return actionSuccess(`Proxy host "${truncName(String(formData.get("name") ?? "Untitled"))}" created using Caddy Auto certificate management. ${warning}`);
     }
-    return actionSuccess("Proxy host created and queued for Caddy reload.");
+    return actionSuccess(`Proxy host "${truncName(String(formData.get("name") ?? "Untitled"))}" created and queued for Caddy reload.`);
   } catch (error) {
     console.error("Failed to create proxy host:", error);
     return actionError(error, "Failed to create proxy host. Please check the logs for details.");
@@ -598,10 +602,11 @@ export async function updateProxyHostAction(
     after(() => applyCaddyConfig().catch((e) => console.error("[proxy-actions] Caddy apply failed:", e)));
 
     // Return success with warning if applicable
+    const hostName = truncName(String(formData.get("name") ?? "Untitled"));
     if (warning) {
-      return actionSuccess(`Proxy host updated using Caddy Auto certificate management. ${warning}`);
+      return actionSuccess(`Proxy host "${hostName}" updated using Caddy Auto certificate management. ${warning}`);
     }
-    return actionSuccess("Proxy host updated.");
+    return actionSuccess(`Proxy host "${hostName}" updated.`);
   } catch (error) {
     console.error(`Failed to update proxy host ${id}:`, error);
     return actionError(error, "Failed to update proxy host. Please check the logs for details.");
