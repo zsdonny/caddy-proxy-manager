@@ -1,6 +1,7 @@
 import db from "../db";
 import { wafEvents } from "../db/schema";
-import { desc, like, or, count, and, gte, lte, sql, inArray, eq } from "drizzle-orm";
+import { desc, like, or, count, and, gte, lte, sql, inArray, eq, ne } from "drizzle-orm";
+import { isIpInAnyCidr } from "../cidr";
 
 export type WafEvent = {
   id: number;
@@ -51,17 +52,21 @@ export async function countMutedWafEvents(search?: string): Promise<number> {
   return row?.value ?? 0;
 }
 
-export async function countWafEventsInRange(from: number, to: number): Promise<number> {
+export async function countWafEventsInRange(from: number, to: number, includeMuted = true): Promise<number> {
+  const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
+  if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const [row] = await db
     .select({ value: count() })
     .from(wafEvents)
-    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to)));
+    .where(and(...conditions));
   return row?.value ?? 0;
 }
 
 export type TopWafRule = { ruleId: number; count: number; message: string | null };
 
-export async function getTopWafRules(from: number, to: number, limit = 10): Promise<TopWafRule[]> {
+export async function getTopWafRules(from: number, to: number, limit = 10, includeMuted = true): Promise<TopWafRule[]> {
+  const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to), sql`${wafEvents.ruleId} IS NOT NULL`];
+  if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const rows = await db
     .select({
       ruleId: wafEvents.ruleId,
@@ -69,7 +74,7 @@ export async function getTopWafRules(from: number, to: number, limit = 10): Prom
       message: sql<string | null>`MAX(${wafEvents.ruleMessage})`,
     })
     .from(wafEvents)
-    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to), sql`${wafEvents.ruleId} IS NOT NULL`))
+    .where(and(...conditions))
     .groupBy(wafEvents.ruleId)
     .orderBy(desc(count()))
     .limit(limit);
@@ -85,15 +90,17 @@ export type TopWafRuleWithHosts = {
   hosts: { host: string; count: number }[];
 };
 
-export async function getTopWafRulesWithHosts(from: number, to: number, limit = 10): Promise<TopWafRuleWithHosts[]> {
-  const topRules = await getTopWafRules(from, to, limit);
+export async function getTopWafRulesWithHosts(from: number, to: number, limit = 10, includeMuted = true): Promise<TopWafRuleWithHosts[]> {
+  const topRules = await getTopWafRules(from, to, limit, includeMuted);
   if (topRules.length === 0) return [];
 
   const ruleIds = topRules.map(r => r.ruleId);
+  const hostConditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to), inArray(wafEvents.ruleId, ruleIds)];
+  if (!includeMuted) hostConditions.push(eq(wafEvents.muted, false));
   const hostRows = await db
     .select({ ruleId: wafEvents.ruleId, host: wafEvents.host, count: count() })
     .from(wafEvents)
-    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to), inArray(wafEvents.ruleId, ruleIds)))
+    .where(and(...hostConditions))
     .groupBy(wafEvents.ruleId, wafEvents.host)
     .orderBy(desc(count()));
 
@@ -105,11 +112,13 @@ export async function getTopWafRulesWithHosts(from: number, to: number, limit = 
   }));
 }
 
-export async function getWafEventCountries(from: number, to: number): Promise<{ countryCode: string; count: number }[]> {
+export async function getWafEventCountries(from: number, to: number, includeMuted = true): Promise<{ countryCode: string; count: number }[]> {
+  const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
+  if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const rows = await db
     .select({ countryCode: wafEvents.countryCode, count: count() })
     .from(wafEvents)
-    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to)))
+    .where(and(...conditions))
     .groupBy(wafEvents.countryCode)
     .orderBy(desc(count()));
   return rows.map(r => ({ countryCode: r.countryCode ?? 'XX', count: r.count }));
@@ -159,4 +168,79 @@ export async function listWafEvents(limit = 50, offset = 0, search?: string, inc
     blocked: r.blocked ?? true,
     muted: r.muted ?? false,
   }));
+}
+
+/**
+ * Re-evaluate all existing events against current muted sources config.
+ * Resets all muted flags, then marks matching events as muted.
+ * Returns the number of events marked as muted.
+ */
+export async function reEvaluateMutedEvents(
+  cidrs: string[],
+  uaPatterns: string[]
+): Promise<number> {
+  // First, clear all muted flags
+  const currentlyMuted = await db.select({ value: count() }).from(wafEvents).where(eq(wafEvents.muted, true));
+  if (currentlyMuted[0]?.value > 0) {
+    await db.update(wafEvents).set({ muted: false }).where(eq(wafEvents.muted, true));
+  }
+
+  if (cidrs.length === 0 && uaPatterns.length === 0) return 0;
+
+  // Load all events with clientIp (batch-friendly approach)
+  const BATCH = 1000;
+  let offset = 0;
+  const mutedIds: number[] = [];
+
+  // Build UA regex matchers once
+  const uaMatchers = uaPatterns.map((p) => {
+    const escaped = p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    try { return new RegExp(`^${escaped}$`, 'i'); } catch { return null; }
+  }).filter((r): r is RegExp => r !== null);
+
+  while (true) {
+    const rows = await db
+      .select({ id: wafEvents.id, clientIp: wafEvents.clientIp, rawData: wafEvents.rawData })
+      .from(wafEvents)
+      .orderBy(wafEvents.id)
+      .limit(BATCH)
+      .offset(offset);
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      let muted = false;
+
+      // Check CIDR match
+      if (cidrs.length > 0 && row.clientIp) {
+        muted = isIpInAnyCidr(row.clientIp, cidrs);
+      }
+
+      // Check UA pattern match (extract from rawData if available)
+      if (!muted && uaMatchers.length > 0 && row.rawData) {
+        try {
+          const data = JSON.parse(row.rawData);
+          const ua = data?.request_headers?.['User-Agent']?.[0]
+            ?? data?.request_headers?.['user-agent']?.[0]
+            ?? '';
+          if (ua) {
+            muted = uaMatchers.some((re) => re.test(ua));
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
+      if (muted) mutedIds.push(row.id);
+    }
+
+    offset += BATCH;
+  }
+
+  // Batch update in chunks
+  const CHUNK = 500;
+  for (let i = 0; i < mutedIds.length; i += CHUNK) {
+    const chunk = mutedIds.slice(i, i + CHUNK);
+    await db.update(wafEvents).set({ muted: true }).where(inArray(wafEvents.id, chunk));
+  }
+
+  return mutedIds.length;
 }

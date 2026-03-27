@@ -20,10 +20,11 @@ function resolveRange(params: URLSearchParams): { from: number; to: number } {
 export async function GET(req: NextRequest) {
   await requireUser();
   const { from, to } = resolveRange(req.nextUrl.searchParams);
+  const includeMuted = req.nextUrl.searchParams.get('include_muted') === '1';
   const [total, topRules, byCountry] = await Promise.all([
-    countWafEventsInRange(from, to),
-    getTopWafRulesWithHosts(from, to, 10),
-    getWafEventCountries(from, to),
+    countWafEventsInRange(from, to, includeMuted),
+    getTopWafRulesWithHosts(from, to, 10, includeMuted),
+    getWafEventCountries(from, to, includeMuted),
   ]);
   return NextResponse.json({ total, topRules, byCountry });
 }

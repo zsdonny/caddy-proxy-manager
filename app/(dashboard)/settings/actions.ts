@@ -8,7 +8,7 @@ import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syn
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
-import { getWafRuleMessages } from "@/src/lib/models/waf-events";
+import { getWafRuleMessages, reEvaluateMutedEvents } from "@/src/lib/models/waf-events";
 import { createWafRuleSet, updateWafRuleSet, deleteWafRuleSet } from "@/src/lib/models/waf-rule-sets";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
@@ -759,16 +759,21 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
 
     await saveWafSettings(config);
 
+    // Re-evaluate existing events against updated muted sources
+    const cidrs = config.muted_sources?.cidrs ?? [];
+    const uaPatterns = config.muted_sources?.ua_patterns ?? [];
+    const mutedCount = await reEvaluateMutedEvents(cidrs, uaPatterns);
+
     try {
       await applyCaddyConfig();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      return { success: true, message: `Settings saved, but could not apply to Caddy: ${errorMsg}` };
+      return { success: true, message: `Settings saved (${mutedCount} events muted), but could not apply to Caddy: ${errorMsg}` };
     }
 
     revalidatePath("/settings");
     revalidatePath("/waf");
-    return { success: true, message: "WAF settings saved." };
+    return { success: true, message: mutedCount > 0 ? `WAF settings saved. ${mutedCount} existing event${mutedCount > 1 ? 's' : ''} marked as muted.` : "WAF settings saved." };
   } catch (error) {
     console.error("Failed to save WAF settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save WAF settings" };

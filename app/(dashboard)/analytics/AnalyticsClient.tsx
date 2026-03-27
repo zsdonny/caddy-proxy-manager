@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import dayjs, { type Dayjs } from 'dayjs';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, X, ShieldOff } from 'lucide-react';
 import type { ApexOptions } from 'apexcharts';
 
 import { Button } from '@/components/ui/button';
@@ -316,6 +316,7 @@ export default function AnalyticsClient() {
   const [userAgents, setUserAgents] = useState<UAStats[]>([]);
   const [blocked, setBlocked] = useState<BlockedPage | null>(null);
   const [wafStats, setWafStats] = useState<WafStats | null>(null);
+  const [wafIncludeMuted, setWafIncludeMuted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
@@ -345,7 +346,7 @@ export default function AnalyticsClient() {
     fetch('/api/analytics/hosts').then(r => r.json()).then(setAllHosts).catch(() => {});
   }, []);
 
-  // Fetch all analytics data when range/host selection changes
+  // Fetch all analytics data (except waf-stats) when range/host selection changes
   useEffect(() => {
     if (interval === 'custom') {
       if (!customFrom || !customTo || customFrom.unix() >= customTo.unix()) return;
@@ -359,19 +360,30 @@ export default function AnalyticsClient() {
       fetch(`/api/analytics/protocols${params}`).then(r => r.json()),
       fetch(`/api/analytics/user-agents${params}`).then(r => r.json()),
       fetch(`/api/analytics/blocked${params}&page=1`).then(r => r.json()),
-      fetch(`/api/analytics/waf-stats${params}`).then(r => r.json()),
-    ]).then(([s, t, c, p, u, b, w]) => {
+    ]).then(([s, t, c, p, u, b]) => {
       setSummary(s);
       setTimeline(t);
       setCountries(c);
       setProtocols(p);
       setUserAgents(u);
       setBlocked(b);
-      setWafStats(w);
     }).catch(() => {
       toast.error('Failed to load analytics data');
     }).finally(() => setLoading(false));
   }, [buildParams, interval, customFrom, customTo]);
+
+  // Fetch waf-stats separately (also re-fetches when muted toggle changes)
+  useEffect(() => {
+    if (interval === 'custom') {
+      if (!customFrom || !customTo || customFrom.unix() >= customTo.unix()) return;
+    }
+    const params = buildParams();
+    const sep = params.includes('?') ? '&' : '?';
+    fetch(`/api/analytics/waf-stats${params}${sep}include_muted=${wafIncludeMuted ? '1' : '0'}`)
+      .then(r => r.json())
+      .then(setWafStats)
+      .catch(() => {});
+  }, [buildParams, interval, customFrom, customTo, wafIncludeMuted]);
 
   const fetchBlockedPage = useCallback((page: number) => {
     fetch(`/api/analytics/blocked${buildParams(`&page=${page}`)}`).then(r => r.json()).then(setBlocked).catch(() => {});
@@ -517,12 +529,30 @@ export default function AnalyticsClient() {
               sub={`${formatBytes(summary.bytesServed)} served`}
               color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
             />
-            <StatCard
-              label="WAF Events"
-              value={(wafStats?.total ?? 0).toLocaleString()}
-              sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
-              color={(wafStats?.total ?? 0) > 0 ? '#f59e0b' : undefined}
-            />
+            <div className="h-full rounded-lg border border-white/[0.12] p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">WAF Events</p>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={wafIncludeMuted ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => setWafIncludeMuted(prev => !prev)}
+                    >
+                      <ShieldOff className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{wafIncludeMuted ? 'Showing scanner noise — click to hide' : 'Scanner noise hidden — click to show'}</TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="mt-1 text-3xl font-bold tracking-tight" style={(wafStats?.total ?? 0) > 0 ? { color: '#f59e0b' } : undefined}>
+                {(wafStats?.total ?? 0).toLocaleString()}
+              </p>
+              {wafStats && wafStats.topRules.length > 0
+                ? <p className="mt-1 text-sm text-muted-foreground">{wafStats.topRules.length} rules triggered</p>
+                : <p className="mt-1 text-sm text-muted-foreground">No WAF events</p>}
+            </div>
           </div>
 
           {/* Timeline */}

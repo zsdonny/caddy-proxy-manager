@@ -636,7 +636,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, ini
                 }}
               >
                 <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
-                {includeMuted ? "Hide" : "Show"} muted ({mutedCount})
+                {includeMuted ? "Hide" : "Show"} scanner ({mutedCount})
               </Button>
             )}
           </div>
