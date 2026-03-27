@@ -618,27 +618,25 @@ export default function WafEventsClient({ events, pagination, initialSearch, ini
                 className="pl-8"
               />
             </div>
-            {mutedCount > 0 && (
-              <Button
-                variant={includeMuted ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => {
-                  const next = !includeMuted;
-                  setIncludeMuted(next);
-                  const params = new URLSearchParams(searchParams.toString());
-                  if (next) {
-                    params.set("include_muted", "1");
-                  } else {
-                    params.delete("include_muted");
-                  }
-                  params.delete("page");
-                  router.push(`${pathname}?${params.toString()}`);
-                }}
-              >
-                <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
-                {includeMuted ? "Hide" : "Show"} muted ({mutedCount})
-              </Button>
-            )}
+            <Button
+              variant={includeMuted ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                const next = !includeMuted;
+                setIncludeMuted(next);
+                const params = new URLSearchParams(searchParams.toString());
+                if (next) {
+                  params.set("include_muted", "1");
+                } else {
+                  params.delete("include_muted");
+                }
+                params.delete("page");
+                router.push(`${pathname}?${params.toString()}`);
+              }}
+            >
+              <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
+              {includeMuted ? "Hide" : "Show"} muted ({mutedCount})
+            </Button>
           </div>
           <DataTable
             columns={columns}
