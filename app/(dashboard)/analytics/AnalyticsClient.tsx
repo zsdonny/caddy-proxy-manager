@@ -571,7 +571,7 @@ export default function AnalyticsClient() {
             {timeline.length === 0 ? (
               <div className="py-10 text-center text-muted-foreground text-sm">No data for this period</div>
             ) : (
-              <div className="overflow-x-auto w-full">
+              <div className="overflow-hidden w-full">
                 <ReactApexChart
                   type="area"
                   series={timelineSeries}
@@ -646,7 +646,7 @@ export default function AnalyticsClient() {
                 <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
               ) : (
                 <>
-                  <div className="overflow-x-auto w-full">
+                  <div className="overflow-hidden w-full">
                     <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
                   </div>
                   <Table className="mt-2">
@@ -668,7 +668,7 @@ export default function AnalyticsClient() {
               {userAgents.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
               ) : (
-                <div className="overflow-x-auto w-full">
+                <div className="overflow-hidden w-full">
                   <ReactApexChart type="bar" series={barSeries} options={barOptions} height={260} />
                 </div>
               )}
@@ -749,8 +749,8 @@ export default function AnalyticsClient() {
               <p className="text-sm font-semibold mb-4">
                 Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. muted)' : ''}
               </p>
-              <div className="overflow-x-auto w-full">
-                <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+              <div className="overflow-hidden w-full">
+                <ReactApexChart key={`waf-bar-${wafIncludeMuted}`} type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
               </div>
               <Table className="mt-4">
                 <TableHeader>
