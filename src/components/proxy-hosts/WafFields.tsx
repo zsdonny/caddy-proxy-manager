@@ -176,7 +176,7 @@ export function WafFields({ value, showModeSelector = true, ruleSets = [] }: Pro
             onChange={(e) => setCustomDirectives(e.target.value)}
             onFocus={() => setDirectivesFocused(true)}
             onBlur={() => setDirectivesFocused(false)}
-            className={cn(\"font-mono text-xs min-h-[80px]\", hasSecLangErrors && \"border-red-500\")}
+            className={cn("font-mono text-xs min-h-[80px]", hasSecLangErrors && "border-red-500")}
             rows={directivesFocused ? 12 : 3}
             aria-label="Custom SecLang directives"
           />
