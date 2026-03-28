@@ -237,9 +237,9 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
   // accumulate anomaly scores and the phase-2 blocking evaluation (949110)
   // interrupts the request before the custom ctl ever fires.
   //
-  // SecRuleRemoveById directives must come AFTER the CRS Include because they
-  // operate on already-loaded rules — placing them before the Include would be
-  // a no-op.
+  // SecRuleRemoveById, SecRuleUpdateTargetById, and SecRuleUpdateActionById
+  // directives must come AFTER the CRS Include because they operate on
+  // already-loaded rules — placing them before the Include would be a no-op.
   let preCrs = '';
   let postCrs = '';
 
@@ -258,11 +258,12 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
       .trim();
 
     if (sanitized) {
-      // SecRuleRemoveById → post-CRS; everything else → pre-CRS
+      // SecRuleRemoveById / SecRuleUpdateTargetById / SecRuleUpdateActionById → post-CRS;
+      // everything else → pre-CRS
       const pre: string[] = [];
       const post: string[] = [];
       for (const line of sanitized.split('\n')) {
-        if (/^\s*SecRuleRemoveById\b/i.test(line)) {
+        if (/^\s*SecRule(?:RemoveById|UpdateTargetById|UpdateActionById)\b/i.test(line)) {
           post.push(line);
         } else {
           pre.push(line);

@@ -581,6 +581,58 @@ describe('buildWafHandler — custom directive ordering (pre-CRS / post-CRS spli
     expect(excludedPos).toBeGreaterThan(crsPos);
   });
 
+  it('SecRuleUpdateTargetById in custom directives appears AFTER CRS includes', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: 'SecRuleUpdateTargetById 942100-942999 "!REQUEST_HEADERS:cookie"',
+    });
+    const directives = handler.directives as string;
+    const updatePos = directives.indexOf('SecRuleUpdateTargetById 942100-942999');
+    const crsPos = directives.indexOf('@owasp_crs');
+    expect(updatePos).toBeGreaterThanOrEqual(0);
+    expect(crsPos).toBeGreaterThanOrEqual(0);
+    expect(updatePos).toBeGreaterThan(crsPos);
+  });
+
+  it('SecRuleUpdateActionById in custom directives appears AFTER CRS includes', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: 'SecRuleUpdateActionById 949110 "deny,status:403"',
+    });
+    const directives = handler.directives as string;
+    const updatePos = directives.indexOf('SecRuleUpdateActionById 949110');
+    const crsPos = directives.indexOf('@owasp_crs');
+    expect(updatePos).toBeGreaterThanOrEqual(0);
+    expect(crsPos).toBeGreaterThanOrEqual(0);
+    expect(updatePos).toBeGreaterThan(crsPos);
+  });
+
+  it('mixed SecRule + SecRuleRemoveById + SecRuleUpdateTargetById are split correctly', () => {
+    const custom = [
+      'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+      'SecRuleRemoveById 920420',
+      'SecRuleUpdateTargetById 941100-941999 "!REQUEST_HEADERS:cookie"',
+      'SecRule REQUEST_URI "@rx ^/static/" "id:50002,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    ].join('\n');
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: custom,
+    });
+    const directives = handler.directives as string;
+    const crsPos = directives.indexOf('@owasp_crs');
+
+    // SecRule directives should be before CRS
+    expect(directives.indexOf('id:50001')).toBeLessThan(crsPos);
+    expect(directives.indexOf('id:50002')).toBeLessThan(crsPos);
+
+    // SecRuleRemoveById and SecRuleUpdateTargetById should be after CRS
+    expect(directives.indexOf('SecRuleRemoveById 920420')).toBeGreaterThan(crsPos);
+    expect(directives.indexOf('SecRuleUpdateTargetById 941100-941999')).toBeGreaterThan(crsPos);
+  });
+
   it('without CRS, all custom directives still appear in output', () => {
     const custom = [
       'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
