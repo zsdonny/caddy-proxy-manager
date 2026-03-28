@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import dayjs, { type Dayjs } from 'dayjs';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, X, ShieldOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, X } from 'lucide-react';
 import type { ApexOptions } from 'apexcharts';
 
 import { Button } from '@/components/ui/button';
@@ -451,7 +451,7 @@ export default function AnalyticsClient() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-8 max-w-full overflow-hidden">
+    <div className="flex flex-col gap-8 max-w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-1 px-1 py-2">
         <div>
@@ -494,7 +494,7 @@ export default function AnalyticsClient() {
             onChange={setSelectedHosts}
           />
 
-          {/* Scanner noise toggle */}
+          {/* Muted toggle */}
           <div className="flex items-center rounded-md border border-input p-0.5 gap-0.5">
             <Button
               size="sm"
@@ -502,7 +502,7 @@ export default function AnalyticsClient() {
               className="h-7 px-2.5 text-xs"
               onClick={() => setWafIncludeMuted(false)}
             >
-              Clean
+              Unmuted
             </Button>
             <Button
               size="sm"
@@ -510,8 +510,7 @@ export default function AnalyticsClient() {
               className="h-7 px-2.5 text-xs"
               onClick={() => setWafIncludeMuted(true)}
             >
-              <ShieldOff className="h-3 w-3 mr-1" />
-              All
+              Muted
             </Button>
           </div>
         </div>
@@ -551,7 +550,7 @@ export default function AnalyticsClient() {
               color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
             />
             <StatCard
-              label={wafIncludeMuted ? 'WAF Events (incl. scanner)' : 'WAF Events'}
+              label={wafIncludeMuted ? 'WAF Events (incl. muted)' : 'WAF Events'}
               value={(wafStats?.total ?? 0).toLocaleString()}
               sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
               color={(wafStats?.total ?? 0) > 0 ? (wafIncludeMuted ? '#64748b' : '#f59e0b') : undefined}
@@ -740,7 +739,7 @@ export default function AnalyticsClient() {
           {wafStats && wafStats.total > 0 && (
             <div className={cn('rounded-lg border border-white/[0.12] p-5', wafIncludeMuted && 'opacity-80')}>
               <p className="text-sm font-semibold mb-4">
-                Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. scanner noise)' : ''}
+                Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. muted)' : ''}
               </p>
               <div className="overflow-x-auto w-full">
                 <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
