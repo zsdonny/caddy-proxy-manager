@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import AuditLogClient from '../../app/(dashboard)/audit-log/AuditLogClient';
+import { withDashboardLayout } from '../decorators';
 
 type EventRow = { id: number; created_at: string; user: string; summary: string };
 
@@ -65,4 +66,11 @@ export const Empty: Story = {
     pagination: { total: 0, page: 1, perPage: 20 },
     initialSearch: '',
   },
+};
+
+export const Fullscreen: Story = {
+  name: 'Fullscreen — dashboard layout',
+  decorators: [withDashboardLayout],
+  parameters: { layout: 'fullscreen' },
+  args: { ...Default.args },
 };

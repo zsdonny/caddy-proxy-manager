@@ -3,6 +3,7 @@ import { userEvent, within, expect } from 'storybook/test';
 import WafEventsClient from '../../app/(dashboard)/waf/WafEventsClient';
 import type { WafEvent } from '../../src/lib/models/waf-events';
 import type { RuleSetItem } from '../../src/components/waf/RuleSetDialog';
+import { withDashboardLayout } from '../decorators';
 
 const meta: Meta<typeof WafEventsClient> = {
   title: 'Components/WafEventsClient',
@@ -311,4 +312,11 @@ export const MutedSourcesSettings: Story = {
     },
     ruleSets: mockRuleSets,
   },
+};
+
+export const Fullscreen: Story = {
+  name: 'Fullscreen — dashboard layout',
+  decorators: [withDashboardLayout],
+  parameters: { layout: 'fullscreen' },
+  args: { ...WithEvents.args },
 };

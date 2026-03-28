@@ -7,6 +7,7 @@ import type {
   ManagedCertView,
   CaCertificateView,
 } from '../../app/(dashboard)/certificates/page';
+import { withDashboardLayout } from '../decorators';
 
 const meta: Meta<typeof CertificatesClient> = {
   title: 'Components/CertificatesClient',
@@ -210,4 +211,11 @@ export const Empty: Story = {
     caCertificates: [],
     acmePagination: { total: 0, page: 1, perPage: 25 },
   },
+};
+
+export const Fullscreen: Story = {
+  name: 'Fullscreen — dashboard layout',
+  decorators: [withDashboardLayout],
+  parameters: { layout: 'fullscreen' },
+  args: { ...AllTabs.args },
 };

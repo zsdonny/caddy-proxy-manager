@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import AccessListsClient from '../../app/(dashboard)/access-lists/AccessListsClient';
 import type { AccessList } from '../../src/lib/models/access-lists';
+import { withDashboardLayout } from '../decorators';
 
 const meta: Meta<typeof AccessListsClient> = {
   title: 'Components/AccessListsClient',
@@ -107,4 +108,11 @@ export const Empty: Story = {
     lists: [],
     pagination: { total: 0, page: 1, perPage: 10 },
   },
+};
+
+export const Fullscreen: Story = {
+  name: 'Fullscreen — dashboard layout',
+  decorators: [withDashboardLayout],
+  parameters: { layout: 'fullscreen' },
+  args: { ...MultipleCards.args },
 };
