@@ -437,7 +437,7 @@ export default function AnalyticsClient() {
     ...DARK_CHART,
     chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules', stacked: wafIncludeMuted },
     colors: wafIncludeMuted ? ['#f59e0b', '#64748b'] : ['#f59e0b'],
-    plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+    plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
     dataLabels: { enabled: false },
     xaxis: { categories: wafRuleLabels, labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
     yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
@@ -750,7 +750,7 @@ export default function AnalyticsClient() {
                 Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. muted)' : ''}
               </p>
               <div className="overflow-hidden w-full">
-                <ReactApexChart key={`waf-bar-${wafIncludeMuted}`} type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+                <ReactApexChart key={`waf-bar-${wafIncludeMuted}`} type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(160, wafStats.topRules.length * 44)} />
               </div>
               <Table className="mt-4">
                 <TableHeader>
