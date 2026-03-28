@@ -508,3 +508,91 @@ describe('resolveEffectiveWaf — rule_set_ids', () => {
     expect(result!.rule_set_ids).toEqual([5]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildWafHandler — pre-CRS / post-CRS directive splitting
+// ---------------------------------------------------------------------------
+
+describe('buildWafHandler — custom directive ordering (pre-CRS / post-CRS split)', () => {
+  it('SecRule custom directives appear BEFORE CRS includes', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: 'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    });
+    const directives = handler.directives as string;
+    const rulePos = directives.indexOf('id:50001');
+    const crsPos = directives.indexOf('@owasp_crs');
+    expect(rulePos).toBeGreaterThanOrEqual(0);
+    expect(crsPos).toBeGreaterThanOrEqual(0);
+    expect(rulePos).toBeLessThan(crsPos);
+  });
+
+  it('SecRuleRemoveById in custom directives appears AFTER CRS includes', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: 'SecRuleRemoveById 911100',
+    });
+    const directives = handler.directives as string;
+    const removePos = directives.indexOf('SecRuleRemoveById 911100');
+    const crsPos = directives.indexOf('@owasp_crs');
+    expect(removePos).toBeGreaterThanOrEqual(0);
+    expect(crsPos).toBeGreaterThanOrEqual(0);
+    expect(removePos).toBeGreaterThan(crsPos);
+  });
+
+  it('mixed SecRule + SecRuleRemoveById are split correctly around CRS', () => {
+    const custom = [
+      'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+      'SecRuleRemoveById 920420',
+      '# A comment',
+      'SecRuleRemoveById 911100',
+      'SecRule REQUEST_URI "@rx ^/static/" "id:50002,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    ].join('\n');
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      custom_directives: custom,
+    });
+    const directives = handler.directives as string;
+    const crsPos = directives.indexOf('@owasp_crs');
+
+    // SecRule directives and comments should be before CRS
+    expect(directives.indexOf('id:50001')).toBeLessThan(crsPos);
+    expect(directives.indexOf('id:50002')).toBeLessThan(crsPos);
+    expect(directives.indexOf('# A comment')).toBeLessThan(crsPos);
+
+    // SecRuleRemoveById should be after CRS
+    expect(directives.indexOf('SecRuleRemoveById 920420')).toBeGreaterThan(crsPos);
+    expect(directives.indexOf('SecRuleRemoveById 911100')).toBeGreaterThan(crsPos);
+  });
+
+  it('excluded_rule_ids from UI field still appear after CRS', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: true,
+      excluded_rule_ids: [941100],
+      custom_directives: 'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+    });
+    const directives = handler.directives as string;
+    const crsPos = directives.indexOf('@owasp_crs');
+    const excludedPos = directives.indexOf('SecRuleRemoveById 941100');
+    expect(excludedPos).toBeGreaterThan(crsPos);
+  });
+
+  it('without CRS, all custom directives still appear in output', () => {
+    const custom = [
+      'SecRule REQUEST_URI "@rx ^/api/" "id:50001,phase:1,pass,nolog,ctl:ruleEngine=Off"',
+      'SecRuleRemoveById 920420',
+    ].join('\n');
+    const handler = buildWafHandler({
+      ...baseWaf,
+      load_owasp_crs: false,
+      custom_directives: custom,
+    });
+    const directives = handler.directives as string;
+    expect(directives).toContain('id:50001');
+    expect(directives).toContain('SecRuleRemoveById 920420');
+  });
+});

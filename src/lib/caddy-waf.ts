@@ -229,6 +229,53 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     'SecResponseBodyAccess Off',
   );
 
+  // Split custom directives into pre-CRS and post-CRS groups.
+  //
+  // SecRule directives (and their comments) are emitted BEFORE CRS includes so
+  // that `ctl:ruleEngine=Off` and other per-path bypasses take effect before
+  // any CRS rule in the same phase fires.  Without this, CRS phase-1 rules
+  // accumulate anomaly scores and the phase-2 blocking evaluation (949110)
+  // interrupts the request before the custom ctl ever fires.
+  //
+  // SecRuleRemoveById directives must come AFTER the CRS Include because they
+  // operate on already-loaded rules — placing them before the Include would be
+  // a no-op.
+  let preCrs = '';
+  let postCrs = '';
+
+  if (waf.custom_directives?.trim()) {
+    // Strip any lines that would crash Coraza (unsupported directives, bad includes).
+    // Warnings (managed directive duplicates) are allowed through — they're harmless.
+    const errorLines = new Set(
+      validateSecLangDirectives(waf.custom_directives)
+        .filter(i => i.severity === 'error')
+        .map(i => i.line)
+    );
+    const sanitized = waf.custom_directives
+      .split('\n')
+      .filter((_, idx) => !errorLines.has(idx + 1))
+      .join('\n')
+      .trim();
+
+    if (sanitized) {
+      // SecRuleRemoveById → post-CRS; everything else → pre-CRS
+      const pre: string[] = [];
+      const post: string[] = [];
+      for (const line of sanitized.split('\n')) {
+        if (/^\s*SecRuleRemoveById\b/i.test(line)) {
+          post.push(line);
+        } else {
+          pre.push(line);
+        }
+      }
+      preCrs = pre.join('\n').trim();
+      postCrs = post.join('\n').trim();
+    }
+  }
+
+  // Emit custom SecRule directives before CRS so ctl actions take priority.
+  if (preCrs) parts.push(preCrs);
+
   if (waf.load_owasp_crs) {
     // @-prefixed paths resolve from the embedded coraza-coreruleset filesystem,
     // which is only mounted when load_owasp_crs is true.
@@ -244,9 +291,13 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     );
   }
 
+  // SecRuleRemoveById from the UI "Excluded Rule IDs" field
   if (waf.excluded_rule_ids?.length) {
     parts.push(`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`);
   }
+
+  // SecRuleRemoveById from custom directives / rule sets
+  if (postCrs) parts.push(postCrs);
 
   parts.push(
     // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
@@ -259,22 +310,6 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     // to prevent logging multi-MB payloads. Headers (B, F) and rule match trailer (H) are kept.
     'SecAuditLogParts ABFHZ',
   );
-
-  if (waf.custom_directives?.trim()) {
-    // Strip any lines that would crash Coraza (unsupported directives, bad includes).
-    // Warnings (managed directive duplicates) are allowed through — they're harmless.
-    const errorLines = new Set(
-      validateSecLangDirectives(waf.custom_directives)
-        .filter(i => i.severity === 'error')
-        .map(i => i.line)
-    );
-    const sanitized = waf.custom_directives
-      .split('\n')
-      .filter((_, idx) => !errorLines.has(idx + 1))
-      .join('\n')
-      .trim();
-    if (sanitized) parts.push(sanitized);
-  }
 
   const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };
   if (waf.load_owasp_crs) handler.load_owasp_crs = true;
