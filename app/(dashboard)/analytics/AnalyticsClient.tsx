@@ -502,7 +502,7 @@ export default function AnalyticsClient() {
               className="h-7 px-2.5 text-xs"
               onClick={() => setWafIncludeMuted(false)}
             >
-              Unmuted
+              Muted
             </Button>
             <Button
               size="sm"
@@ -510,7 +510,7 @@ export default function AnalyticsClient() {
               className="h-7 px-2.5 text-xs"
               onClick={() => setWafIncludeMuted(true)}
             >
-              Muted
+              Unmuted
             </Button>
           </div>
         </div>
