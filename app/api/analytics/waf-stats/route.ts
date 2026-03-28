@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { requireUser } from '@/src/lib/auth';
 import { INTERVAL_SECONDS } from '@/src/lib/analytics-db';
-import { countWafEventsInRange, getTopWafRulesWithHosts, getWafEventCountries } from '@/src/lib/models/waf-events';
+import { countWafEventsInRange, countWafEventsInRangeDual, getTopWafRulesWithHosts, getWafEventCountries } from '@/src/lib/models/waf-events';
 
 function resolveRange(params: URLSearchParams): { from: number; to: number } {
   const fromParam = params.get('from');
@@ -21,10 +21,26 @@ export async function GET(req: NextRequest) {
   await requireUser();
   const { from, to } = resolveRange(req.nextUrl.searchParams);
   const includeMuted = req.nextUrl.searchParams.get('include_muted') === '1';
+
+  if (includeMuted) {
+    const [dual, topRules, byCountry] = await Promise.all([
+      countWafEventsInRangeDual(from, to),
+      getTopWafRulesWithHosts(from, to, 10, true),
+      getWafEventCountries(from, to, true),
+    ]);
+    return NextResponse.json({
+      total: dual.muted + dual.unmuted,
+      totalMuted: dual.muted,
+      totalUnmuted: dual.unmuted,
+      topRules,
+      byCountry,
+    });
+  }
+
   const [total, topRules, byCountry] = await Promise.all([
-    countWafEventsInRange(from, to, includeMuted),
-    getTopWafRulesWithHosts(from, to, 10, includeMuted),
-    getWafEventCountries(from, to, includeMuted),
+    countWafEventsInRange(from, to, false),
+    getTopWafRulesWithHosts(from, to, 10, false),
+    getWafEventCountries(from, to, false),
   ]);
   return NextResponse.json({ total, topRules, byCountry });
 }

@@ -330,3 +330,35 @@ export const WithRuleSets: Story = {
     ],
   },
 };
+
+export const FocusExpandTextarea: Story = {
+  name: '▶ Directives textarea expands on focus',
+  args: {
+    value: {
+      enabled: true,
+      mode: 'On',
+      load_owasp_crs: true,
+      waf_mode: 'merge',
+      custom_directives: 'SecRule REQUEST_URI "@contains /api" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const textarea = canvas.getByPlaceholderText(/SecRule REQUEST_URI/i);
+
+    // Should start collapsed at 3 rows
+    expect(textarea).toHaveAttribute('rows', '3');
+
+    // Focus → should expand to 12 rows
+    await userEvent.click(textarea);
+    await waitFor(() => {
+      expect(textarea).toHaveAttribute('rows', '12');
+    });
+
+    // Blur → should collapse back to 3 rows
+    await userEvent.tab();
+    await waitFor(() => {
+      expect(textarea).toHaveAttribute('rows', '3');
+    });
+  },
+};

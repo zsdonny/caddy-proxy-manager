@@ -62,6 +62,18 @@ export async function countWafEventsInRange(from: number, to: number, includeMut
   return row?.value ?? 0;
 }
 
+export async function countWafEventsInRangeDual(from: number, to: number): Promise<{ muted: number; unmuted: number }> {
+  const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
+  const [row] = await db
+    .select({
+      muted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 1 THEN 1 ELSE 0 END)`,
+      unmuted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 0 THEN 1 ELSE 0 END)`,
+    })
+    .from(wafEvents)
+    .where(and(...conditions));
+  return { muted: row?.muted ?? 0, unmuted: row?.unmuted ?? 0 };
+}
+
 export type TopWafRule = { ruleId: number; count: number; message: string | null };
 
 export async function getTopWafRules(from: number, to: number, limit = 10, includeMuted = true): Promise<TopWafRule[]> {
@@ -86,6 +98,8 @@ export async function getTopWafRules(from: number, to: number, limit = 10, inclu
 export type TopWafRuleWithHosts = {
   ruleId: number;
   count: number;
+  countMuted: number;
+  countUnmuted: number;
   message: string | null;
   hosts: { host: string; count: number }[];
 };
@@ -104,12 +118,36 @@ export async function getTopWafRulesWithHosts(from: number, to: number, limit = 
     .groupBy(wafEvents.ruleId, wafEvents.host)
     .orderBy(desc(count()));
 
-  return topRules.map(rule => ({
-    ...rule,
-    hosts: hostRows
-      .filter(r => r.ruleId === rule.ruleId)
-      .map(r => ({ host: r.host, count: r.count })),
-  }));
+  // When including muted events, get per-rule muted/unmuted breakdown
+  let mutedBreakdown: Map<number, { muted: number; unmuted: number }> | null = null;
+  if (includeMuted) {
+    const breakdownRows = await db
+      .select({
+        ruleId: wafEvents.ruleId,
+        muted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 1 THEN 1 ELSE 0 END)`,
+        unmuted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 0 THEN 1 ELSE 0 END)`,
+      })
+      .from(wafEvents)
+      .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to), inArray(wafEvents.ruleId, ruleIds)))
+      .groupBy(wafEvents.ruleId);
+    mutedBreakdown = new Map(
+      breakdownRows
+        .filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
+        .map(r => [r.ruleId, { muted: r.muted ?? 0, unmuted: r.unmuted ?? 0 }])
+    );
+  }
+
+  return topRules.map(rule => {
+    const breakdown = mutedBreakdown?.get(rule.ruleId);
+    return {
+      ...rule,
+      countMuted: breakdown?.muted ?? 0,
+      countUnmuted: breakdown?.unmuted ?? rule.count,
+      hosts: hostRows
+        .filter(r => r.ruleId === rule.ruleId)
+        .map(r => ({ host: r.host, count: r.count })),
+    };
+  });
 }
 
 export async function getWafEventCountries(from: number, to: number, includeMuted = true): Promise<{ countryCode: string; count: number }[]> {

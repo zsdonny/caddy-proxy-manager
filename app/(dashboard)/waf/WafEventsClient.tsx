@@ -595,8 +595,8 @@ export default function WafEventsClient({ events, pagination, initialSearch, ini
   ];
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      <h1 className="text-3xl font-semibold">WAF</h1>
+    <div className="flex flex-col gap-6 w-full">
+      <h1 className="text-2xl font-bold tracking-tight">WAF</h1>
       <p className="text-muted-foreground">Web Application Firewall events and rule management.</p>
 
       <Tabs value={tab} onValueChange={setTab}>

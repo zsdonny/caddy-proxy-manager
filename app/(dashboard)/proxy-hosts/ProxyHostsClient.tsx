@@ -428,7 +428,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       <PageHeader
         title="Proxy Hosts"
         description="Define HTTP(S) reverse proxies orchestrated by Caddy with automated certificates."

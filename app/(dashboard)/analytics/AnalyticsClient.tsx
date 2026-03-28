@@ -67,8 +67,8 @@ interface BlockedEvent {
 }
 interface BlockedPage { events: BlockedEvent[]; total: number; page: number; pages: number; }
 
-interface TopWafRule { ruleId: number; count: number; message: string | null; hosts: { host: string; count: number }[]; }
-interface WafStats { total: number; topRules: TopWafRule[]; byCountry: { countryCode: string; count: number }[]; }
+interface TopWafRule { ruleId: number; count: number; countMuted: number; countUnmuted: number; message: string | null; hosts: { host: string; count: number }[]; }
+interface WafStats { total: number; totalMuted?: number; totalUnmuted?: number; topRules: TopWafRule[]; byCountry: { countryCode: string; count: number }[]; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ function formatTs(ts: number, rangeSeconds: number): string {
 }
 
 const DARK_CHART: ApexOptions = {
-  chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: false } },
+  chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: true, speed: 400, dynamicAnimation: { enabled: true, speed: 350 } } },
   theme: { mode: 'dark' },
   grid: { borderColor: 'rgba(255,255,255,0.06)' },
   tooltip: { theme: 'dark' },
@@ -187,9 +187,9 @@ function DateTimePicker({
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="h-full rounded-lg border border-white/[0.12] p-5">
+    <div className="h-full rounded-lg border border-white/[0.12] p-5 transition-all duration-300">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-1 text-3xl font-bold tracking-tight" style={color ? { color } : undefined}>
+      <p className="mt-1 text-3xl font-bold tracking-tight transition-colors duration-300" style={color ? { color } : undefined}>
         {value}
       </p>
       {sub && <p className="mt-1 text-sm text-muted-foreground">{sub}</p>}
@@ -435,14 +435,20 @@ export default function AnalyticsClient() {
   const wafRuleLabels = (wafStats?.topRules ?? []).map(r => `#${r.ruleId}`);
   const wafBarOptions: ApexOptions = {
     ...DARK_CHART,
-    chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules' },
-    colors: [wafIncludeMuted ? '#64748b' : '#f59e0b'],
+    chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules', stacked: wafIncludeMuted },
+    colors: wafIncludeMuted ? ['#f59e0b', '#64748b'] : ['#f59e0b'],
     plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
     dataLabels: { enabled: false },
     xaxis: { categories: wafRuleLabels, labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
     yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
+    legend: wafIncludeMuted ? { labels: { colors: '#94a3b8' }, position: 'top' } : { show: false },
   };
-  const wafBarSeries = [{ name: 'Hits', data: (wafStats?.topRules ?? []).map(r => r.count) }];
+  const wafBarSeries = wafIncludeMuted
+    ? [
+        { name: 'Unmuted', data: (wafStats?.topRules ?? []).map(r => r.countUnmuted) },
+        { name: 'Muted', data: (wafStats?.topRules ?? []).map(r => r.countMuted) },
+      ]
+    : [{ name: 'Hits', data: (wafStats?.topRules ?? []).map(r => r.count) }];
 
   const wafByCountry = new Map((wafStats?.byCountry ?? []).map(r => [r.countryCode, r.count]));
 
@@ -451,12 +457,12 @@ export default function AnalyticsClient() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-8 max-w-full">
+    <div className="flex flex-col gap-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-1 px-1 py-2">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Traffic Intelligence</p>
-          <h1 className="text-xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
         </div>
         <div className="flex flex-row items-center gap-3 flex-wrap">
           {/* Interval toggle group */}
@@ -552,8 +558,10 @@ export default function AnalyticsClient() {
             <StatCard
               label={wafIncludeMuted ? 'WAF Events (incl. muted)' : 'WAF Events'}
               value={(wafStats?.total ?? 0).toLocaleString()}
-              sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
-              color={(wafStats?.total ?? 0) > 0 ? (wafIncludeMuted ? '#64748b' : '#f59e0b') : undefined}
+              sub={wafIncludeMuted && wafStats?.totalMuted != null
+                ? `${wafStats.totalUnmuted?.toLocaleString()} unmuted · ${wafStats.totalMuted.toLocaleString()} muted`
+                : wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
+              color={(wafStats?.total ?? 0) > 0 ? '#f59e0b' : undefined}
             />
           </div>
 
@@ -576,13 +584,13 @@ export default function AnalyticsClient() {
 
           {/* World map + Countries */}
           <div className="grid grid-cols-1 md:grid-cols-[7fr_5fr] gap-3">
-            <div className="rounded-lg border border-white/[0.12] flex flex-col p-5">
+            <div className="rounded-lg border border-white/[0.12] flex flex-col p-5 min-w-0">
               <p className="text-sm font-semibold mb-2">Traffic by Country</p>
               <div className="flex-1 min-h-[280px]">
                 <WorldMap data={countries} selectedCountry={selectedCountry} />
               </div>
             </div>
-            <div className="rounded-lg border border-white/[0.12] p-4">
+            <div className="rounded-lg border border-white/[0.12] p-4 min-w-0">
               <p className="text-sm font-semibold mb-3">Top Countries</p>
               {countries.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground text-sm">No geo data available</div>
@@ -632,7 +640,7 @@ export default function AnalyticsClient() {
 
           {/* Protocols + User Agents */}
           <div className="grid grid-cols-1 md:grid-cols-[5fr_7fr] gap-3">
-            <div className="rounded-lg border border-white/[0.12] p-5">
+            <div className="rounded-lg border border-white/[0.12] p-5 min-w-0">
               <p className="text-sm font-semibold mb-4">HTTP Protocols</p>
               {protocols.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
@@ -655,7 +663,7 @@ export default function AnalyticsClient() {
                 </>
               )}
             </div>
-            <div className="rounded-lg border border-white/[0.12] p-5">
+            <div className="rounded-lg border border-white/[0.12] p-5 min-w-0">
               <p className="text-sm font-semibold mb-4">Top User Agents</p>
               {userAgents.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
@@ -737,7 +745,7 @@ export default function AnalyticsClient() {
 
           {/* WAF Top Rules */}
           {wafStats && wafStats.total > 0 && (
-            <div className={cn('rounded-lg border border-white/[0.12] p-5', wafIncludeMuted && 'opacity-80')}>
+            <div className="rounded-lg border border-white/[0.12] p-5 transition-all duration-300">
               <p className="text-sm font-semibold mb-4">
                 Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. muted)' : ''}
               </p>

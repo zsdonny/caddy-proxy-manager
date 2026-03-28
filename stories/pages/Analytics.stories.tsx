@@ -73,11 +73,11 @@ const mockBlocked = {
 const mockWafStats = {
   total: 342,
   topRules: [
-    { ruleId: 932160, count: 128, message: 'Remote Command Execution: Unix Shell Code Found', hosts: [{ host: 'app.example.com', count: 98 }, { host: 'api.example.com', count: 30 }] },
-    { ruleId: 942100, count: 87, message: 'SQL Injection Attack Detected via libinjection', hosts: [{ host: 'api.example.com', count: 87 }] },
-    { ruleId: 941100, count: 64, message: 'XSS Attack Detected via libinjection', hosts: [{ host: 'app.example.com', count: 64 }] },
-    { ruleId: 920350, count: 38, message: 'Host header is a numeric IP address', hosts: [{ host: 'cdn.example.com', count: 38 }] },
-    { ruleId: 930100, count: 25, message: 'Path Traversal Attack (/../)', hosts: [{ host: 'api.example.com', count: 25 }] },
+    { ruleId: 932160, count: 128, countMuted: 0, countUnmuted: 128, message: 'Remote Command Execution: Unix Shell Code Found', hosts: [{ host: 'app.example.com', count: 98 }, { host: 'api.example.com', count: 30 }] },
+    { ruleId: 942100, count: 87, countMuted: 0, countUnmuted: 87, message: 'SQL Injection Attack Detected via libinjection', hosts: [{ host: 'api.example.com', count: 87 }] },
+    { ruleId: 941100, count: 64, countMuted: 0, countUnmuted: 64, message: 'XSS Attack Detected via libinjection', hosts: [{ host: 'app.example.com', count: 64 }] },
+    { ruleId: 920350, count: 38, countMuted: 0, countUnmuted: 38, message: 'Host header is a numeric IP address', hosts: [{ host: 'cdn.example.com', count: 38 }] },
+    { ruleId: 930100, count: 25, countMuted: 0, countUnmuted: 25, message: 'Path Traversal Attack (/../)', hosts: [{ host: 'api.example.com', count: 25 }] },
   ],
   byCountry: [
     { countryCode: 'RU', count: 142 },
@@ -91,14 +91,33 @@ const mockWafStatsWithScanner = {
   ...mockWafStats,
   total: 1847,
   topRules: [
-    { ruleId: 920350, count: 1205, message: 'Host header is a numeric IP address', hosts: [{ host: 'app.example.com', count: 800 }, { host: 'api.example.com', count: 405 }] },
+    { ruleId: 920350, count: 1205, countMuted: 0, countUnmuted: 1205, message: 'Host header is a numeric IP address', hosts: [{ host: 'app.example.com', count: 800 }, { host: 'api.example.com', count: 405 }] },
     ...mockWafStats.topRules,
+  ],
+};
+
+const mockWafStatsDual = {
+  total: 892,
+  totalUnmuted: 342,
+  totalMuted: 550,
+  topRules: [
+    { ruleId: 932160, count: 328, countUnmuted: 128, countMuted: 200, message: 'Remote Command Execution: Unix Shell Code Found', hosts: [{ host: 'app.example.com', count: 248 }, { host: 'api.example.com', count: 80 }] },
+    { ruleId: 942100, count: 187, countUnmuted: 87, countMuted: 100, message: 'SQL Injection Attack Detected via libinjection', hosts: [{ host: 'api.example.com', count: 187 }] },
+    { ruleId: 941100, count: 164, countUnmuted: 64, countMuted: 100, message: 'XSS Attack Detected via libinjection', hosts: [{ host: 'app.example.com', count: 164 }] },
+    { ruleId: 920350, count: 138, countUnmuted: 38, countMuted: 100, message: 'Host header is a numeric IP address', hosts: [{ host: 'cdn.example.com', count: 138 }] },
+    { ruleId: 930100, count: 75, countUnmuted: 25, countMuted: 50, message: 'Path Traversal Attack (/../)', hosts: [{ host: 'api.example.com', count: 75 }] },
+  ],
+  byCountry: [
+    { countryCode: 'RU', count: 342 },
+    { countryCode: 'CN', count: 318 },
+    { countryCode: 'US', count: 152 },
+    { countryCode: 'DE', count: 80 },
   ],
 };
 
 // ── URL-based fetch router ───────────────────────────────────────────────────
 
-function mockFetch(wafResponse = mockWafStats) {
+function mockFetch(wafResponse = mockWafStats, wafMutedResponse = mockWafStatsDual) {
   return (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.includes('/api/analytics/hosts')) return Promise.resolve(json(mockHosts));
@@ -110,7 +129,7 @@ function mockFetch(wafResponse = mockWafStats) {
     if (url.includes('/api/analytics/blocked')) return Promise.resolve(json(mockBlocked));
     if (url.includes('/api/analytics/waf-stats')) {
       const includeMuted = url.includes('include_muted=1');
-      return Promise.resolve(json(includeMuted ? wafResponse : mockWafStats));
+      return Promise.resolve(json(includeMuted ? wafMutedResponse : wafResponse));
     }
     return Promise.resolve(json({ error: 'not found' }, 404));
   };
@@ -233,6 +252,15 @@ export const HighBlockRate: Story = {
       if (url.includes('/api/analytics/waf-stats')) return Promise.resolve(json(attackWaf));
       return Promise.resolve(json({ error: 'not found' }, 404));
     }) as typeof window.fetch;
+    return () => { window.fetch = orig; };
+  },
+};
+
+export const TwoToneWafBars: Story = {
+  name: 'Analytics — two-tone muted/unmuted WAF bars',
+  beforeEach: () => {
+    const orig = window.fetch;
+    window.fetch = mockFetch(mockWafStats, mockWafStatsDual) as typeof window.fetch;
     return () => { window.fetch = orig; };
   },
 };

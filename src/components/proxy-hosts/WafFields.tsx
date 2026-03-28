@@ -38,6 +38,7 @@ export function WafFields({ value, showModeSelector = true, ruleSets = [] }: Pro
   const [loadCrs, setLoadCrs] = useState(value?.load_owasp_crs ?? true);
   const [customDirectives, setCustomDirectives] = useState(value?.custom_directives ?? "");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [directivesFocused, setDirectivesFocused] = useState(false);
   const [selectedRuleSets, setSelectedRuleSets] = useState<number[]>(value?.rule_set_ids ?? []);
 
   const secLangIssues = useMemo(() => validateSecLangDirectives(customDirectives), [customDirectives]);
@@ -173,8 +174,10 @@ export function WafFields({ value, showModeSelector = true, ruleSets = [] }: Pro
             placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
             value={customDirectives}
             onChange={(e) => setCustomDirectives(e.target.value)}
-            className={cn("font-mono text-xs min-h-[80px]", hasSecLangErrors && "border-red-500")}
-            rows={3}
+            onFocus={() => setDirectivesFocused(true)}
+            onBlur={() => setDirectivesFocused(false)}
+            className={cn(\"font-mono text-xs min-h-[80px]\", hasSecLangErrors && \"border-red-500\")}
+            rows={directivesFocused ? 12 : 3}
             aria-label="Custom SecLang directives"
           />
           {secLangIssues.length > 0 && (

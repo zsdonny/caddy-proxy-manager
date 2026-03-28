@@ -396,7 +396,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       <L4PortsApplyBanner refreshSignal={bannerRefresh} />
 
       <PageHeader

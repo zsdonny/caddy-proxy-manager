@@ -64,7 +64,7 @@ export default function OverviewClient({
   recentEvents: RecentEvent[];
 }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6 w-full">
       {/* Welcome header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">

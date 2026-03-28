@@ -154,16 +154,20 @@ export function CreateHostDialog({
                         placeholder='[{"handler": "headers", ...}]'
                         defaultValue={initialData?.custom_pre_handlers_json ?? ""}
                         rows={3}
+                        onFocus={(e) => { e.currentTarget.rows = 12; }}
+                        onBlur={(e) => { e.currentTarget.rows = 3; }}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Optional JSON array of Caddy handlers</p>
+                    <p className=\"text-xs text-muted-foreground mt-1\">Optional JSON array of Caddy handlers</p>
                 </div>
                 <div>
-                    <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
+                    <label className=\"text-sm font-medium mb-1 block\">Custom Reverse Proxy (JSON)</label>
                     <Textarea
-                        name="custom_reverse_proxy_json"
-                        placeholder='{"headers": {"request": {...}}}'
-                        defaultValue={initialData?.custom_reverse_proxy_json ?? ""}
+                        name=\"custom_reverse_proxy_json\"
+                        placeholder='{\"headers\": {\"request\": {...}}}'
+                        defaultValue={initialData?.custom_reverse_proxy_json ?? \"\"}
                         rows={3}
+                        onFocus={(e) => { e.currentTarget.rows = 12; }}
+                        onBlur={(e) => { e.currentTarget.rows = 3; }}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                         Deep-merge into reverse_proxy handler (only applies in proxy mode)

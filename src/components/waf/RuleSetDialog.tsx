@@ -83,7 +83,7 @@ export function RuleSetDialog({ open, onClose, item }: Props) {
       open={open}
       onClose={onClose}
       title={isEdit ? "Edit Rule Set" : "Create Rule Set"}
-      maxWidth="md"
+      maxWidth="lg"
       actions={
         <>
           <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
@@ -121,8 +121,8 @@ export function RuleSetDialog({ open, onClose, item }: Props) {
             name="directives"
             rows={8}
             value={directives}
-            onChange={(e) => setDirectives(e.target.value)}
-            placeholder={`SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"`}
+            onChange={(e) => setDirectives(e.target.value)}            onFocus={(e) => { e.currentTarget.rows = 16; }}
+            onBlur={(e) => { e.currentTarget.rows = 8; }}            placeholder={`SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"`}
             className={cn("font-mono text-[0.8rem] resize-y", hasErrors && "border-red-500")}
           />
           {secLangIssues.length > 0 && (

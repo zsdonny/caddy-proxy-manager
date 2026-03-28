@@ -253,7 +253,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       <h1 className="text-2xl font-bold tracking-tight">Profile & Account Settings</h1>
 
       {error && (
