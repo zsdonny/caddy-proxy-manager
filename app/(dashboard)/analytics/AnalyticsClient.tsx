@@ -435,7 +435,7 @@ export default function AnalyticsClient() {
   const wafRuleLabels = (wafStats?.topRules ?? []).map(r => `#${r.ruleId}`);
   const wafBarOptions: ApexOptions = {
     ...DARK_CHART,
-    chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules', stacked: wafIncludeMuted },
+    chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules', stacked: wafIncludeMuted, animations: { enabled: false } },
     colors: wafIncludeMuted ? ['#f59e0b', '#64748b'] : ['#f59e0b'],
     plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
     dataLabels: { enabled: false },
@@ -744,14 +744,19 @@ export default function AnalyticsClient() {
           </div>
 
           {/* WAF Top Rules */}
-          {wafStats && wafStats.total > 0 && (
+          {wafStats && (
             <div className="rounded-lg border border-white/[0.12] p-5 transition-all duration-300">
               <p className="text-sm font-semibold mb-4">
                 Top WAF Rules Triggered{wafIncludeMuted ? ' (incl. muted)' : ''}
               </p>
+              {wafStats.topRules.length > 0 ? (
               <div className="overflow-hidden w-full">
                 <ReactApexChart key={`waf-bar-${wafIncludeMuted}`} type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(160, wafStats.topRules.length * 44)} />
               </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-8 text-center">No WAF rules triggered in this time range.</p>
+              )}
+              {wafStats.topRules.length > 0 && (
               <Table className="mt-4">
                 <TableHeader>
                   <TableRow>
@@ -788,6 +793,7 @@ export default function AnalyticsClient() {
                   ))}
                 </TableBody>
               </Table>
+              )}
             </div>
           )}
         </>
