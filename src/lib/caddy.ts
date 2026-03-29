@@ -704,7 +704,40 @@ async function buildProxyRoutes(
           effectiveWaf.custom_directives = [ruleSetDirectives, effectiveWaf.custom_directives].filter(Boolean).join('\n');
         }
       }
-      handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allow_websocket)));
+      const wafHandler = buildWafHandler(effectiveWaf);
+      if (row.allow_websocket) {
+        // Coraza's ResponseWriter wrapper does not implement http.Hijacker,
+        // which Caddy's reverse_proxy requires for WebSocket upgrades.
+        // Skip the WAF handler for WebSocket upgrade requests by using a
+        // negated matcher: WAF only runs when the request is NOT a WS
+        // upgrade.  When no route matches (i.e. it IS a WS request), the
+        // subroute falls through to the outer handler chain (blocker,
+        // headers, reverse_proxy) without WAF wrapping the ResponseWriter.
+        //
+        // The negated matcher requires ALL of: GET method, Connection:
+        // Upgrade header, and Upgrade: websocket header.  This prevents
+        // an attacker from spoofing a single Upgrade header on a POST to
+        // bypass WAF inspection.
+        handlers.unshift({
+          handler: "subroute",
+          routes: [
+            {
+              match: [{
+                not: [{
+                  method: ["GET"],
+                  header: {
+                    Connection: ["*upgrade*", "*Upgrade*"],
+                    Upgrade: ["websocket", "WebSocket"],
+                  },
+                }],
+              }],
+              handle: [wafHandler],
+            },
+          ],
+        });
+      } else {
+        handlers.unshift(wafHandler);
+      }
     }
 
     if (row.hsts_enabled) {
