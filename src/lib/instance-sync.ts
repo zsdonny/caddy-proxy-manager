@@ -188,10 +188,22 @@ export async function getInstanceMode(): Promise<InstanceMode> {
 export async function setInstanceMode(mode: InstanceMode): Promise<void> {
   // If mode is set via environment, don't allow changing it
   if (isInstanceModeFromEnv()) {
-    console.warn("Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime");
-    return;
+    throw new Error("Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime");
   }
   await setSetting(INSTANCE_MODE_KEY, mode);
+}
+
+/**
+ * Clears replica-specific metadata: stored primary token and last sync state.
+ * Called when a replica is demoted to standalone/primary so stale sync data
+ * doesn't linger in the database.
+ */
+export async function clearReplicaState(): Promise<void> {
+  if (!isSyncTokenFromEnv()) {
+    await setSetting(PRIMARY_TOKEN_KEY, "");
+  }
+  await setSetting(REPLICA_LAST_SYNC_AT_KEY, null);
+  await setSetting(REPLICA_LAST_SYNC_ERROR_KEY, null);
 }
 
 export async function getPrimaryToken(): Promise<string | null> {

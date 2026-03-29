@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
-import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syncInstances } from "@/src/lib/instance-sync";
+import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syncInstances, clearReplicaState, getReplicaLastSync } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages, reEvaluateMutedEvents } from "@/src/lib/models/waf-events";
 import { createWafRuleSet, updateWafRuleSet, deleteWafRuleSet } from "@/src/lib/models/waf-rule-sets";
+import { createAuditEvent } from "@/src/lib/models/audit";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
 /**
@@ -412,14 +413,77 @@ export async function updateUpstreamDnsResolutionSettingsAction(
 
 export async function updateInstanceModeAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
-    await requireAdmin();
-    const mode = String(formData.get("mode") ?? "").trim() as "standalone" | "primary" | "replica";
-    if (mode !== "standalone" && mode !== "primary" && mode !== "replica") {
+    const session = await requireAdmin();
+    const newMode = String(formData.get("mode") ?? "").trim() as "standalone" | "primary" | "replica";
+    if (newMode !== "standalone" && newMode !== "primary" && newMode !== "replica") {
       return { success: false, message: "Invalid instance mode" };
     }
-    await setInstanceMode(mode);
+
+    const previousMode = await getInstanceMode();
+    if (newMode === previousMode) {
+      return { success: true, message: `Instance mode is already ${newMode}` };
+    }
+
+    // Guard: warn about split-brain when switching to primary from a recently-synced replica
+    if (newMode === "primary" && previousMode === "replica") {
+      const { at } = await getReplicaLastSync();
+      if (at) {
+        const lastSyncMs = new Date(at).getTime();
+        const fiveMinAgo = Date.now() - 5 * 60_000;
+        if (lastSyncMs > fiveMinAgo) {
+          const confirmed = formData.get("confirmPromotion") === "on";
+          if (!confirmed) {
+            return {
+              success: false,
+              message: "This replica was synced from a primary within the last 5 minutes. " +
+                "Promoting to primary may cause a split-brain if the original primary is still active. " +
+                "Submit again with confirmation to proceed."
+            };
+          }
+        }
+      }
+    }
+
+    await setInstanceMode(newMode);
+
+    // Clean up replica state when leaving replica mode
+    if (previousMode === "replica" && newMode !== "replica") {
+      await clearReplicaState();
+    }
+
+    // Audit log
+    await createAuditEvent({
+      userId: Number(session.user.id),
+      action: "UPDATE",
+      entityType: "INSTANCE_MODE",
+      summary: `Instance mode changed from ${previousMode} to ${newMode}`,
+    });
+
+    // Re-apply Caddy config so mode-dependent behavior takes effect
+    try {
+      await applyCaddyConfig();
+    } catch (error) {
+      console.error("Failed to apply Caddy config after mode change:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      revalidatePath("/settings");
+      return {
+        success: true,
+        message: `Instance mode set to ${newMode}, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+
+    // If we're now primary, attempt an initial sync to replicas
+    if (newMode === "primary") {
+      await syncInstances();
+    }
+
+    // Best-effort: notify old primary that this node is no longer a replica.
+    // If this node was a replica, the old primary will get 403 on next sync push
+    // and can detect the detachment. No explicit notification needed beyond the
+    // natural 403 response the sync endpoint already returns.
+
     revalidatePath("/settings");
-    return { success: true, message: `Instance mode set to ${mode}` };
+    return { success: true, message: `Instance mode changed from ${previousMode} to ${newMode}` };
   } catch (error) {
     console.error("Failed to update instance mode:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to update instance mode" };

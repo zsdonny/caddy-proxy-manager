@@ -6,7 +6,7 @@
  * database, giving full control over table content without affecting
  * any real db file.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TestDb } from '../helpers/db';
@@ -46,7 +46,7 @@ vi.mock('../../src/lib/db', async () => {
 });
 
 // These imports must come AFTER vi.mock to pick up the mocked module.
-import { buildSyncPayload, applySyncPayload, type SyncPayload } from '../../src/lib/instance-sync';
+import { buildSyncPayload, applySyncPayload, setInstanceMode, getInstanceMode, clearReplicaState, getReplicaLastSync, setReplicaLastSync, setPrimaryToken, getPrimaryToken, type SyncPayload } from '../../src/lib/instance-sync';
 import * as schema from '../../src/lib/db/schema';
 
 // ---------------------------------------------------------------------------
@@ -607,5 +607,99 @@ describe('applySyncPayload', () => {
     // Ports already match → no trigger needed
     const triggerPath = join(ctx.tmpDir, 'l4-ports.trigger');
     expect(existsSync(triggerPath)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setInstanceMode
+// ---------------------------------------------------------------------------
+
+describe('setInstanceMode', () => {
+  afterEach(() => {
+    delete process.env.INSTANCE_MODE;
+  });
+
+  it('sets the mode in the database', async () => {
+    await setInstanceMode('primary');
+    expect(await getInstanceMode()).toBe('primary');
+  });
+
+  it('can cycle through all modes', async () => {
+    await setInstanceMode('replica');
+    expect(await getInstanceMode()).toBe('replica');
+
+    await setInstanceMode('standalone');
+    expect(await getInstanceMode()).toBe('standalone');
+
+    await setInstanceMode('primary');
+    expect(await getInstanceMode()).toBe('primary');
+  });
+
+  it('throws when INSTANCE_MODE env var is set', async () => {
+    process.env.INSTANCE_MODE = 'replica';
+    await expect(setInstanceMode('standalone')).rejects.toThrow(
+      'Instance mode is configured via INSTANCE_MODE environment variable'
+    );
+  });
+
+  it('throws for deprecated master env var', async () => {
+    process.env.INSTANCE_MODE = 'master';
+    await expect(setInstanceMode('standalone')).rejects.toThrow(
+      'INSTANCE_MODE environment variable'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearReplicaState
+// ---------------------------------------------------------------------------
+
+describe('clearReplicaState', () => {
+  afterEach(() => {
+    delete process.env.INSTANCE_SYNC_TOKEN;
+  });
+
+  it('clears the primary token when not env-configured', async () => {
+    await setPrimaryToken('my-secret-token');
+    expect(await getPrimaryToken()).toBe('my-secret-token');
+
+    await clearReplicaState();
+    expect(await getPrimaryToken()).toBeNull();
+  });
+
+  it('clears last sync timestamp and error', async () => {
+    await setReplicaLastSync({ ok: true });
+    const before = await getReplicaLastSync();
+    expect(before.at).not.toBeNull();
+
+    await clearReplicaState();
+    const after = await getReplicaLastSync();
+    expect(after.at).toBeNull();
+    expect(after.error).toBeNull();
+  });
+
+  it('clears sync error state', async () => {
+    await setReplicaLastSync({ ok: false, error: 'TLS failed' });
+    const before = await getReplicaLastSync();
+    expect(before.error).toBe('TLS failed');
+
+    await clearReplicaState();
+    const after = await getReplicaLastSync();
+    expect(after.error).toBeNull();
+  });
+
+  it('does not clear token when INSTANCE_SYNC_TOKEN env var is set', async () => {
+    process.env.INSTANCE_SYNC_TOKEN = 'env-token';
+
+    // Set a non-env token manually in DB (bypassing the setPrimaryToken guard)
+    // Instead just verify clearReplicaState still clears sync metadata
+    await setReplicaLastSync({ ok: false, error: 'Something broke' });
+    await clearReplicaState();
+
+    const after = await getReplicaLastSync();
+    expect(after.at).toBeNull();
+    expect(after.error).toBeNull();
+    // Token should still be 'env-token' since env takes precedence
+    expect(await getPrimaryToken()).toBe('env-token');
   });
 });

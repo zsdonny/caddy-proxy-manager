@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin, Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AppDialog } from "@/components/ui/AppDialog";
 import { StatusChip } from "@/components/ui/StatusChip";
 import type {
   GeneralSettings,
@@ -245,6 +247,60 @@ export default function SettingsClient({
     instanceSync.overrides.upstreamDnsResolution
   );
 
+  // ── Instance mode confirmation dialog ────────────────────────────────────────
+  const [pendingMode, setPendingMode] = useState<string>(instanceSync.mode);
+  const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const instanceModeFormRef = useRef<HTMLFormElement>(null);
+
+  const MODE_CHANGE_WARNINGS: Record<string, Record<string, string>> = {
+    replica: {
+      standalone: "This replica will disconnect from the primary and start operating independently. " +
+        "All synced data (proxy hosts, certificates, access lists) will be retained locally. " +
+        "The primary will not be notified and will receive 403 errors on future sync attempts.",
+      primary: "This replica will be promoted to a primary node. " +
+        "If the original primary is still active, you may end up with two primaries (split-brain). " +
+        "Make sure the original primary has been decommissioned or demoted first.",
+    },
+    primary: {
+      standalone: "This primary will stop pushing configuration to replicas. " +
+        "Existing replicas will continue operating with their last-synced configuration but will no longer receive updates.",
+      replica: "This primary will become a replica. It will stop pushing to existing replicas " +
+        "and start accepting configuration from another primary. " +
+        "Configure a primary sync token after switching.",
+    },
+    standalone: {
+      primary: "This instance will start acting as a primary. " +
+        "You can add replica instances after switching to push configuration to them.",
+      replica: "This instance will become a replica. " +
+        "Configure a primary sync token after switching to receive configuration from a primary.",
+    },
+  };
+
+  function handleModeFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (pendingMode === instanceSync.mode) return; // no change, let it submit normally
+
+    const warning = MODE_CHANGE_WARNINGS[instanceSync.mode]?.[pendingMode];
+    if (warning) {
+      e.preventDefault();
+      setShowModeConfirm(true);
+    }
+  }
+
+  function confirmModeChange() {
+    setShowModeConfirm(false);
+    if (instanceModeFormRef.current) {
+      // Add confirmPromotion hidden field for split-brain guard
+      if (instanceSync.mode === "replica" && pendingMode === "primary") {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "confirmPromotion";
+        input.value = "on";
+        instanceModeFormRef.current.appendChild(input);
+      }
+      instanceModeFormRef.current.requestSubmit();
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 w-full">
       <div className="flex flex-col gap-1">
@@ -259,7 +315,7 @@ export default function SettingsClient({
         description="Choose whether this instance acts independently, pushes configuration to replica nodes, or pulls configuration from a primary."
         accent={A.sync}
       >
-        <form action={instanceModeFormAction} className="flex flex-col gap-3">
+        <form ref={instanceModeFormRef} action={instanceModeFormAction} onSubmit={handleModeFormSubmit} className="flex flex-col gap-3">
           {instanceSync.modeFromEnv && (
             <InfoAlert>
               Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime.
@@ -270,7 +326,7 @@ export default function SettingsClient({
           )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="instance-mode">Instance mode</Label>
-            <Select name="mode" defaultValue={instanceSync.mode} disabled={instanceSync.modeFromEnv}>
+            <Select name="mode" value={pendingMode} onValueChange={setPendingMode} disabled={instanceSync.modeFromEnv}>
               <SelectTrigger id="instance-mode">
                 <SelectValue />
               </SelectTrigger>
@@ -287,6 +343,27 @@ export default function SettingsClient({
             </Button>
           </div>
         </form>
+
+        {/* Mode change confirmation dialog */}
+        <AppDialog
+          open={showModeConfirm}
+          onClose={() => setShowModeConfirm(false)}
+          title="Confirm mode change"
+          submitLabel="Confirm"
+          onSubmit={confirmModeChange}
+        >
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-2 text-sm">
+              <p className="font-medium">
+                Change from <span className="font-mono">{instanceSync.mode}</span> to <span className="font-mono">{pendingMode}</span>?
+              </p>
+              <p className="text-muted-foreground">
+                {MODE_CHANGE_WARNINGS[instanceSync.mode]?.[pendingMode]}
+              </p>
+            </div>
+          </div>
+        </AppDialog>
 
         {isReplica && (
           <div className="flex flex-col gap-3 mt-1">
