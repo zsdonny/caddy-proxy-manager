@@ -522,6 +522,7 @@ export default function SettingsClient({
       <SettingSection
         icon={<Settings2 className="h-4 w-4" />}
         title="General"
+        description="The hostname Caddy listens on at startup and the ACME contact email used for certificate notifications."
         accent={A.general}
       >
         <form action={generalFormAction} className="flex flex-col gap-3">
