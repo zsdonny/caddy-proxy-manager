@@ -78,8 +78,8 @@ describe('rollup hour-bucket math', () => {
   it('purge cutoff rounds down to hour boundary', () => {
     const cutoffTs = 1_700_005_500;
     const cutoffHour = Math.floor(cutoffTs / 3600) * 3600;
-    expect(cutoffHour).toBe(1_700_004_000); // 1_700_005_500 / 3600 = 472223.75.. -> 472222 * 3600 = ...
-    // Verify: 1_700_005_500 / 3600 = 472223.75, floor = 472223, *3600 = 1_700_004_800
+    expect(cutoffHour).toBe(1_700_002_800); // 1_700_005_500 / 3600 = 472223.75, floor = 472223, *3600 = 1_700_002_800
+    // Verify: 1_700_005_500 / 3600 = 472223.75, floor = 472223, *3600 = 1_700_002_800
     const expected = Math.floor(1_700_005_500 / 3600) * 3600;
     expect(cutoffHour).toBe(expected);
   });
