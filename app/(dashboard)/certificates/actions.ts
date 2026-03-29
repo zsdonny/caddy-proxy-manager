@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
+import { after } from "next/server";
+import { applyCaddyConfig } from "@/src/lib/caddy";
 import { createCertificate, deleteCertificate, updateCertificate } from "@/src/lib/models/certificates";
 
 function parseDomains(value: FormDataEntryValue | null): string[] {
@@ -50,6 +52,7 @@ export async function updateCertificateAction(id: number, formData: FormData) {
     userId
   );
   revalidatePath("/certificates");
+  after(() => applyCaddyConfig().catch((e) => console.error("[cert-actions] Caddy apply failed:", e)));
 }
 
 export async function deleteCertificateAction(id: number) {
@@ -57,4 +60,5 @@ export async function deleteCertificateAction(id: number) {
   const userId = Number(session.user.id);
   await deleteCertificate(id, userId);
   revalidatePath("/certificates");
+  after(() => applyCaddyConfig().catch((e) => console.error("[cert-actions] Caddy apply failed:", e)));
 }

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
+import { after } from "next/server";
+import { applyCaddyConfig } from "@/src/lib/caddy";
 import {
   addAccessListEntry,
   createAccessList,
@@ -47,6 +49,7 @@ export async function updateAccessListAction(id: number, formData: FormData) {
     userId
   );
   revalidatePath("/access-lists");
+  after(() => applyCaddyConfig().catch((e) => console.error("[access-list-actions] Caddy apply failed:", e)));
 }
 
 export async function deleteAccessListAction(id: number) {
@@ -54,6 +57,7 @@ export async function deleteAccessListAction(id: number) {
   const userId = Number(session.user.id);
   await deleteAccessList(id, userId);
   revalidatePath("/access-lists");
+  after(() => applyCaddyConfig().catch((e) => console.error("[access-list-actions] Caddy apply failed:", e)));
 }
 
 export async function addAccessEntryAction(id: number, formData: FormData) {
@@ -68,6 +72,7 @@ export async function addAccessEntryAction(id: number, formData: FormData) {
     userId
   );
   revalidatePath("/access-lists");
+  after(() => applyCaddyConfig().catch((e) => console.error("[access-list-actions] Caddy apply failed:", e)));
 }
 
 export async function deleteAccessEntryAction(accessListId: number, entryId: number) {
@@ -75,4 +80,5 @@ export async function deleteAccessEntryAction(accessListId: number, entryId: num
   const userId = Number(session.user.id);
   await removeAccessListEntry(accessListId, entryId, userId);
   revalidatePath("/access-lists");
+  after(() => applyCaddyConfig().catch((e) => console.error("[access-list-actions] Caddy apply failed:", e)));
 }

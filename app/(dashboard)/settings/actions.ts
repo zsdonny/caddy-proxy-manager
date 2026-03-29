@@ -713,6 +713,7 @@ export async function suppressWafRuleForHostAction(ruleId: number, hostname: str
     const existingWaf = host.waf ?? { enabled: true, waf_mode: 'merge' as const };
     const ids = [...new Set([...(existingWaf.excluded_rule_ids ?? []), ruleId])];
     await updateProxyHost(host.id, { waf: { ...existingWaf, enabled: true, waf_mode: existingWaf.waf_mode ?? 'merge', excluded_rule_ids: ids } }, userId);
+    try { await applyCaddyConfig(); } catch { /* non-fatal */ }
     revalidatePath("/proxy-hosts");
     revalidatePath("/waf");
     return { success: true, message: `Rule ${ruleId} suppressed for ${hostname}.` };
