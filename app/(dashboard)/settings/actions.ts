@@ -12,6 +12,27 @@ import { getWafRuleMessages, reEvaluateMutedEvents } from "@/src/lib/models/waf-
 import { createWafRuleSet, updateWafRuleSet, deleteWafRuleSet } from "@/src/lib/models/waf-rule-sets";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
+/**
+ * Check if a WAF rule set is currently in use by any proxy host or global WAF settings.
+ */
+async function isRuleSetInUse(ruleSetId: number): Promise<boolean> {
+  // Check global WAF settings
+  const wafSettings = await getWafSettings();
+  if (wafSettings?.rule_set_ids?.includes(ruleSetId)) {
+    return true;
+  }
+
+  // Check all proxy hosts
+  const hosts = await listProxyHosts();
+  for (const host of hosts) {
+    if (host.waf?.rule_set_ids?.includes(ruleSetId)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 type ActionResult = {
   success: boolean;
   message?: string;
@@ -843,6 +864,12 @@ export async function updateWafRuleSetAction(id: number, data: { name: string; d
       description: data.description.trim(),
       directives: data.directives.trim(),
     });
+
+    // Push Caddy config if any proxy hosts are using this ruleset
+    if (await isRuleSetInUse(id)) {
+      await applyCaddyConfig();
+    }
+
     revalidatePath("/waf");
     return { success: true, message: "Rule set updated" };
   } catch (error) {
@@ -856,7 +883,15 @@ export async function updateWafRuleSetAction(id: number, data: { name: string; d
 export async function deleteWafRuleSetAction(id: number): Promise<ActionResult> {
   try {
     await requireAdmin();
+    // Check if any hosts are using this ruleset before deletion
+    const wasInUse = await isRuleSetInUse(id);
     await deleteWafRuleSet(id);
+
+    // Push Caddy config to remove the ruleset from affected hosts
+    if (wasInUse) {
+      await applyCaddyConfig();
+    }
+
     revalidatePath("/waf");
     return { success: true, message: "Rule set deleted" };
   } catch (error) {
