@@ -17,7 +17,7 @@ import { Globe, X } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { GeoBlockSettings } from "@/lib/settings";
 import { GeoBlockMode } from "@/lib/models/proxy-hosts";
-import { COUNTRIES, flagEmoji } from "./countries";
+import { COUNTRIES, flagSrc } from "./countries";
 
 // ─── GeoIpStatus ─────────────────────────────────────────────────────────────
 
@@ -210,7 +210,7 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
                     : "border-border hover:border-muted-foreground hover:bg-accent"
                 )}
               >
-                <span className="text-[0.85rem] leading-none">{flagEmoji(country.code)}</span>
+                <img src={flagSrc(country.code)} alt="" aria-hidden="true" className="h-[14px] w-[19px] rounded-[1px] object-cover flex-shrink-0" />
                 <span>{country.name}</span>
                 <span className="opacity-55 text-[0.6rem] font-mono">{country.code}</span>
               </button>
@@ -237,7 +237,7 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
                       : "bg-green-500/10 text-green-700 dark:text-green-400"
                   )}
                 >
-                  <span className="text-[0.8rem]">{flagEmoji(code)}</span>
+                  <img src={flagSrc(code)} alt="" aria-hidden="true" className="h-3 w-[17px] rounded-[1px] object-cover flex-shrink-0" />
                   {country?.name ?? code}
                   <button
                     type="button"

@@ -253,11 +253,13 @@ export const COUNTRIES: Country[] = [
   { code: "ZW", name: "Zimbabwe" },
 ];
 
-export function flagEmoji(code: string): string {
+/** Returns the path to the bundled Twemoji SVG for a 2-letter country code. */
+export function flagSrc(code: string): string {
   const offset = 0x1f1e6;
-  return code
+  const hex = code
     .toUpperCase()
     .split("")
-    .map((c) => String.fromCodePoint(offset + c.charCodeAt(0) - 65))
-    .join("");
+    .map((c) => (offset + c.charCodeAt(0) - 65).toString(16))
+    .join("-");
+  return `/twemoji/${hex}.svg`;
 }

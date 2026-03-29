@@ -242,6 +242,10 @@ ip link set <NIC> promisc on && ip link add test0 link <NIC> type macvlan mode b
 
 Use `docker-compose.yml` (or paste it into Portainer). The `l4-port-manager` sidecar will start and the "Apply Ports" banner will reappear when L4 port bindings need updating.
 
+## Third-Party Attributions
+
+- Country flag emoji graphics are provided by [Twemoji](https://github.com/jdecked/twemoji) (maintained by [@jdecked](https://github.com/jdecked)), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 ---
 
 <details>
