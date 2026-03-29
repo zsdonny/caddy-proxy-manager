@@ -1,7 +1,24 @@
 import db from "../db";
-import { wafEvents } from "../db/schema";
-import { desc, like, or, count, and, gte, lte, sql, inArray, eq, ne } from "drizzle-orm";
+import { wafEvents, wafRollups } from "../db/schema";
+import { desc, like, or, count, and, gte, lte, sql, inArray, eq, ne, lt } from "drizzle-orm";
 import { isIpInAnyCidr } from "../cidr";
+import { invalidateWafRollups } from "../analytics-rollup";
+
+const ROLLUP_THRESHOLD_S = 86400;
+const HOUR_S = 3600;
+
+function currentWafHourBucket(): number {
+  return Math.floor(Date.now() / 1000 / HOUR_S) * HOUR_S;
+}
+
+function buildWafRollupWhere(from: number, to: number) {
+  const currentHour = currentWafHourBucket();
+  return and(
+    gte(wafRollups.hourBucket, Math.floor(from / HOUR_S) * HOUR_S),
+    lt(wafRollups.hourBucket, currentHour),
+    lt(wafRollups.hourBucket, to),
+  );
+}
 
 export type WafEvent = {
   id: number;
@@ -53,6 +70,26 @@ export async function countMutedWafEvents(search?: string): Promise<number> {
 }
 
 export async function countWafEventsInRange(from: number, to: number, includeMuted = true): Promise<number> {
+  if (to - from >= ROLLUP_THRESHOLD_S) {
+    const rollupWhere = buildWafRollupWhere(from, to);
+    const rollupRow = db
+      .select({
+        total: includeMuted
+          ? sql<number>`sum(${wafRollups.totalEvents})`
+          : sql<number>`sum(${wafRollups.unmutedEvents})`,
+      })
+      .from(wafRollups)
+      .where(rollupWhere)
+      .get();
+
+    // partial current hour from raw table
+    const currentHour = currentWafHourBucket();
+    const partialConditions = [gte(wafEvents.ts, Math.max(from, currentHour)), lte(wafEvents.ts, to)];
+    if (!includeMuted) partialConditions.push(eq(wafEvents.muted, false));
+    const [partialRow] = await db.select({ value: count() }).from(wafEvents).where(and(...partialConditions));
+    return (rollupRow?.total ?? 0) + (partialRow?.value ?? 0);
+  }
+
   const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
   if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const [row] = await db
@@ -63,6 +100,33 @@ export async function countWafEventsInRange(from: number, to: number, includeMut
 }
 
 export async function countWafEventsInRangeDual(from: number, to: number): Promise<{ muted: number; unmuted: number }> {
+  if (to - from >= ROLLUP_THRESHOLD_S) {
+    const rollupWhere = buildWafRollupWhere(from, to);
+    const rollupRow = db
+      .select({
+        muted: sql<number>`sum(${wafRollups.mutedEvents})`,
+        unmuted: sql<number>`sum(${wafRollups.unmutedEvents})`,
+      })
+      .from(wafRollups)
+      .where(rollupWhere)
+      .get();
+
+    // partial current hour
+    const currentHour = currentWafHourBucket();
+    const partialConditions = [gte(wafEvents.ts, Math.max(from, currentHour)), lte(wafEvents.ts, to)];
+    const [partialRow] = await db
+      .select({
+        muted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 1 THEN 1 ELSE 0 END)`,
+        unmuted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 0 THEN 1 ELSE 0 END)`,
+      })
+      .from(wafEvents)
+      .where(and(...partialConditions));
+    return {
+      muted: (rollupRow?.muted ?? 0) + (partialRow?.muted ?? 0),
+      unmuted: (rollupRow?.unmuted ?? 0) + (partialRow?.unmuted ?? 0),
+    };
+  }
+
   const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
   const [row] = await db
     .select({
@@ -105,6 +169,113 @@ export type TopWafRuleWithHosts = {
 };
 
 export async function getTopWafRulesWithHosts(from: number, to: number, limit = 10, includeMuted = true): Promise<TopWafRuleWithHosts[]> {
+  if (to - from >= ROLLUP_THRESHOLD_S) {
+    const rollupWhere = buildWafRollupWhere(from, to);
+
+    // Aggregate per ruleId from rollup
+    const ruleRows = db
+      .select({
+        ruleId: wafRollups.ruleId,
+        ruleMessage: sql<string | null>`MAX(${wafRollups.ruleMessage})`,
+        total: includeMuted
+          ? sql<number>`sum(${wafRollups.totalEvents})`
+          : sql<number>`sum(${wafRollups.unmutedEvents})`,
+        muted: sql<number>`sum(${wafRollups.mutedEvents})`,
+        unmuted: sql<number>`sum(${wafRollups.unmutedEvents})`,
+      })
+      .from(wafRollups)
+      .where(and(rollupWhere, sql`${wafRollups.ruleId} IS NOT NULL`))
+      .groupBy(wafRollups.ruleId)
+      .orderBy(sql`sum(${wafRollups.totalEvents}) desc`)
+      .limit(limit)
+      .all();
+
+    if (ruleRows.length === 0) return [];
+
+    const ruleIds = ruleRows
+      .map(r => r.ruleId)
+      .filter((id): id is number => id != null);
+
+    // Aggregate hosts per ruleId from rollup
+    const hostRows = db
+      .select({
+        ruleId: wafRollups.ruleId,
+        host: wafRollups.host,
+        cnt: includeMuted
+          ? sql<number>`sum(${wafRollups.totalEvents})`
+          : sql<number>`sum(${wafRollups.unmutedEvents})`,
+      })
+      .from(wafRollups)
+      .where(and(rollupWhere, inArray(wafRollups.ruleId, ruleIds)))
+      .groupBy(wafRollups.ruleId, wafRollups.host)
+      .orderBy(sql`sum(${wafRollups.totalEvents}) desc`)
+      .all();
+
+    // Merge partial current hour from raw table
+    const currentHour = currentWafHourBucket();
+    const partialBase = [gte(wafEvents.ts, Math.max(from, currentHour)), lte(wafEvents.ts, to), inArray(wafEvents.ruleId, ruleIds)];
+    if (!includeMuted) partialBase.push(eq(wafEvents.muted, false));
+
+    const partialRuleRows = await db
+      .select({
+        ruleId: wafEvents.ruleId,
+        count: count(),
+        muted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 1 THEN 1 ELSE 0 END)`,
+        unmuted: sql<number>`SUM(CASE WHEN ${wafEvents.muted} = 0 THEN 1 ELSE 0 END)`,
+      })
+      .from(wafEvents)
+      .where(and(...partialBase))
+      .groupBy(wafEvents.ruleId);
+
+    const partialHostRows = await db
+      .select({ ruleId: wafEvents.ruleId, host: wafEvents.host, count: count() })
+      .from(wafEvents)
+      .where(and(...partialBase))
+      .groupBy(wafEvents.ruleId, wafEvents.host);
+
+    const partialRuleMap = new Map(
+      partialRuleRows
+        .filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
+        .map(r => [r.ruleId, r])
+    );
+    const partialHostMap = new Map<number, Map<string, number>>();
+    for (const r of partialHostRows) {
+      if (r.ruleId == null) continue;
+      if (!partialHostMap.has(r.ruleId)) partialHostMap.set(r.ruleId, new Map());
+      partialHostMap.get(r.ruleId)!.set(r.host, (partialHostMap.get(r.ruleId)!.get(r.host) ?? 0) + r.count);
+    }
+
+    return ruleRows
+      .filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
+      .map(rule => {
+        const partial = partialRuleMap.get(rule.ruleId);
+        const totalCount = (rule.total ?? 0) + (partial?.count ?? 0);
+        const mutedCount = (rule.muted ?? 0) + (partial?.muted ?? 0);
+        const unmutedCount = (rule.unmuted ?? 0) + (partial?.unmuted ?? 0);
+
+        // Merge host counts
+        const hostMap = new Map<string, number>();
+        for (const h of hostRows.filter(r => r.ruleId === rule.ruleId)) {
+          hostMap.set(h.host, (hostMap.get(h.host) ?? 0) + (h.cnt ?? 0));
+        }
+        for (const [host, cnt] of partialHostMap.get(rule.ruleId)?.entries() ?? []) {
+          hostMap.set(host, (hostMap.get(host) ?? 0) + cnt);
+        }
+        const hosts = Array.from(hostMap.entries())
+          .sort(([, a], [, b]) => b - a)
+          .map(([host, count]) => ({ host, count }));
+
+        return {
+          ruleId: rule.ruleId,
+          count: totalCount,
+          countMuted: mutedCount,
+          countUnmuted: unmutedCount,
+          message: rule.ruleMessage ?? null,
+          hosts,
+        };
+      });
+  }
+
   const topRules = await getTopWafRules(from, to, limit, includeMuted);
   if (topRules.length === 0) return [];
 
@@ -151,6 +322,38 @@ export async function getTopWafRulesWithHosts(from: number, to: number, limit = 
 }
 
 export async function getWafEventCountries(from: number, to: number, includeMuted = true): Promise<{ countryCode: string; count: number }[]> {
+  if (to - from >= ROLLUP_THRESHOLD_S) {
+    const rollupWhere = buildWafRollupWhere(from, to);
+    const rollupRows = db
+      .select({
+        countryCode: wafRollups.countryCode,
+        total: includeMuted
+          ? sql<number>`sum(${wafRollups.totalEvents})`
+          : sql<number>`sum(${wafRollups.unmutedEvents})`,
+      })
+      .from(wafRollups)
+      .where(rollupWhere)
+      .groupBy(wafRollups.countryCode)
+      .all();
+
+    // partial current hour
+    const currentHour = currentWafHourBucket();
+    const partialConditions = [gte(wafEvents.ts, Math.max(from, currentHour)), lte(wafEvents.ts, to)];
+    if (!includeMuted) partialConditions.push(eq(wafEvents.muted, false));
+    const partialRows = await db
+      .select({ countryCode: wafEvents.countryCode, count: count() })
+      .from(wafEvents)
+      .where(and(...partialConditions))
+      .groupBy(wafEvents.countryCode);
+
+    const countryMap = new Map<string, number>();
+    for (const r of rollupRows) countryMap.set(r.countryCode ?? 'XX', (countryMap.get(r.countryCode ?? 'XX') ?? 0) + (r.total ?? 0));
+    for (const r of partialRows) countryMap.set(r.countryCode ?? 'XX', (countryMap.get(r.countryCode ?? 'XX') ?? 0) + r.count);
+    return Array.from(countryMap.entries())
+      .sort(([, a], [, b]) => b - a)
+      .map(([countryCode, count]) => ({ countryCode, count }));
+  }
+
   const conditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to)];
   if (!includeMuted) conditions.push(eq(wafEvents.muted, false));
   const rows = await db
@@ -279,6 +482,10 @@ export async function reEvaluateMutedEvents(
     const chunk = mutedIds.slice(i, i + CHUNK);
     await db.update(wafEvents).set({ muted: true }).where(inArray(wafEvents.id, chunk));
   }
+
+  // Muted flags changed — invalidate pre-aggregated WAF rollups so they
+  // get re-computed with correct muted/unmuted counts on the next cycle.
+  invalidateWafRollups();
 
   return mutedIds.length;
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { requireUser } from '@/src/lib/auth';
 import { getAnalyticsBlocked, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
+import { cachedResponse, ttlForRange } from '@/src/lib/analytics-cache';
 
 export async function GET(req: NextRequest) {
   await requireUser();
@@ -11,7 +12,8 @@ export async function GET(req: NextRequest) {
   const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const { from, to } = resolveRange(searchParams);
-  const data = await getAnalyticsBlocked(from, to, hosts, page);
+  const key = `blocked:${from}:${to}:${hostsParam}:${page}`;
+  const data = await cachedResponse(key, ttlForRange(from, to), () => getAnalyticsBlocked(from, to, hosts, page));
   return NextResponse.json(data);
 }
 

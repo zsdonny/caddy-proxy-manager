@@ -5,6 +5,7 @@ import db from './db';
 import { trafficEvents, logParseState } from './db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { getRetentionSettings } from './settings';
+import { rollupTrafficHours, purgeOldTrafficRollups } from './analytics-rollup';
 
 const LOG_FILE = '/logs/access.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
@@ -185,6 +186,8 @@ async function purgeOldEntries(): Promise<void> {
   const retention = await getRetentionSettings();
   const days = retention?.trafficRetentionDays ?? DEFAULT_RETENTION_DAYS;
   const cutoff = Math.floor(now / 1000) - days * 86400;
+  rollupTrafficHours();
+  purgeOldTrafficRollups(cutoff);
   db.run(`DELETE FROM traffic_events WHERE ts < ${cutoff}`);
 }
 

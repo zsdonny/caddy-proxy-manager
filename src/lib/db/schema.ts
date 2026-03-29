@@ -319,3 +319,42 @@ export const acmeCertCache = sqliteTable("acme_cert_cache", {
   probedAt: text("probed_at").notNull(),
   probeTarget: text("probe_target").notNull(),
 });
+
+export const trafficRollups = sqliteTable(
+  'traffic_rollups',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    hourBucket: integer('hour_bucket').notNull(),
+    host: text('host').notNull().default(''),
+    countryCode: text('country_code'),
+    proto: text('proto').notNull().default(''),
+    userAgent: text('user_agent').notNull().default(''),
+    totalRequests: integer('total_requests').notNull().default(0),
+    blockedRequests: integer('blocked_requests').notNull().default(0),
+    uniqueIps: integer('unique_ips').notNull().default(0),
+    bytesSent: integer('bytes_sent').notNull().default(0),
+  },
+  (table) => ({
+    hourIdx: index('idx_traffic_rollups_hour').on(table.hourBucket),
+    uniqueRow: uniqueIndex('traffic_rollups_unique').on(table.hourBucket, table.host, table.countryCode, table.proto, table.userAgent),
+  })
+);
+
+export const wafRollups = sqliteTable(
+  'waf_rollups',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    hourBucket: integer('hour_bucket').notNull(),
+    host: text('host').notNull().default(''),
+    countryCode: text('country_code'),
+    ruleId: integer('rule_id'),
+    ruleMessage: text('rule_message'),
+    totalEvents: integer('total_events').notNull().default(0),
+    mutedEvents: integer('muted_events').notNull().default(0),
+    unmutedEvents: integer('unmuted_events').notNull().default(0),
+  },
+  (table) => ({
+    hourIdx: index('idx_waf_rollups_hour').on(table.hourBucket),
+    uniqueRow: uniqueIndex('waf_rollups_unique').on(table.hourBucket, table.host, table.countryCode, table.ruleId),
+  })
+);

@@ -134,6 +134,13 @@
       "when": 1774900000000,
       "tag": "0018_waf_muted",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1775000000000,
+      "tag": "0019_rollup_tables",
+      "breakpoints": true
     }
   ]
 }

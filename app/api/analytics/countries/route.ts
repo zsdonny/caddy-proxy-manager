@@ -3,6 +3,7 @@ import { requireUser } from '@/src/lib/auth';
 
 export const dynamic = 'force-dynamic';
 import { getAnalyticsCountries, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
+import { cachedResponse, ttlForRange } from '@/src/lib/analytics-cache';
 
 export async function GET(req: NextRequest) {
   await requireUser();
@@ -10,7 +11,8 @@ export async function GET(req: NextRequest) {
   const hostsParam = searchParams.get('hosts') ?? '';
   const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
   const { from, to } = resolveRange(searchParams);
-  const data = await getAnalyticsCountries(from, to, hosts);
+  const key = `countries:${from}:${to}:${hostsParam}`;
+  const data = await cachedResponse(key, ttlForRange(from, to), () => getAnalyticsCountries(from, to, hosts));
   return NextResponse.json(data);
 }
 

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { getRetentionSettings, getWafSettings } from './settings';
 import type { WafSettings } from './settings';
 import { isIpInAnyCidr } from './cidr';
+import { rollupWafHours, purgeOldWafRollups } from './analytics-rollup';
 
 const AUDIT_LOG = '/logs/waf-audit.log';
 const RULES_LOG = '/logs/waf-rules.log';
@@ -285,6 +286,8 @@ async function purgeOldEntries(): Promise<void> {
   const retention = await getRetentionSettings();
   const days = retention?.wafRetentionDays ?? DEFAULT_RETENTION_DAYS;
   const cutoff = Math.floor(now / 1000) - days * 86400;
+  rollupWafHours();
+  purgeOldWafRollups(cutoff);
   db.run(`DELETE FROM waf_events WHERE ts < ${cutoff}`);
   truncateAuditLog();
 }
