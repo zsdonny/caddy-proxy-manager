@@ -238,3 +238,63 @@ describe('proxy-hosts null meta', () => {
     expect(JSON.parse(r2!.meta!).waf.enabled).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Authentik meta round-trip
+// ---------------------------------------------------------------------------
+
+describe('proxy-hosts authentik meta', () => {
+  it('stores and retrieves authentik config with protected_paths', async () => {
+    const meta = {
+      authentik: {
+        enabled: true,
+        outpost_domain: 'outpost.goauthentik.io',
+        outpost_upstream: 'https://authentik:9000',
+        protected_paths: ['/admin/*', '/dashboard/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.authentik.enabled).toBe(true);
+    expect(parsed.authentik.protected_paths).toEqual(['/admin/*', '/dashboard/*']);
+    expect(parsed.authentik.excluded_paths).toBeUndefined();
+  });
+
+  it('stores and retrieves authentik config with excluded_paths', async () => {
+    const meta = {
+      authentik: {
+        enabled: true,
+        outpost_domain: 'outpost.goauthentik.io',
+        outpost_upstream: 'https://authentik:9000',
+        excluded_paths: ['/share/*', '/api/public/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.authentik.enabled).toBe(true);
+    expect(parsed.authentik.excluded_paths).toEqual(['/share/*', '/api/public/*']);
+    expect(parsed.authentik.protected_paths).toBeUndefined();
+  });
+
+  it('authentik excluded_paths and protected_paths survive independent round-trips', async () => {
+    const h1 = await insertHost({
+      name: 'Protected',
+      meta: JSON.stringify({ authentik: { enabled: true, outpost_domain: 'auth.example.com', outpost_upstream: 'https://auth:9000', protected_paths: ['/admin/*'] } }),
+    });
+    const h2 = await insertHost({
+      name: 'Excluded',
+      meta: JSON.stringify({ authentik: { enabled: true, outpost_domain: 'auth.example.com', outpost_upstream: 'https://auth:9000', excluded_paths: ['/share/*'] } }),
+    });
+
+    const r1 = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, h1.id) });
+    const r2 = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, h2.id) });
+
+    expect(JSON.parse(r1!.meta!).authentik.protected_paths).toEqual(['/admin/*']);
+    expect(JSON.parse(r1!.meta!).authentik.excluded_paths).toBeUndefined();
+
+    expect(JSON.parse(r2!.meta!).authentik.excluded_paths).toEqual(['/share/*']);
+    expect(JSON.parse(r2!.meta!).authentik.protected_paths).toBeUndefined();
+  });
+});

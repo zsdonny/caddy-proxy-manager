@@ -73,6 +73,8 @@ export function AuthentikFields({
 }) {
     const initial = authentik ?? null;
     const [enabled, setEnabled] = useState(initial?.enabled ?? false);
+    const [protectedPathsValue, setProtectedPathsValue] = useState(initial?.protectedPaths?.join(", ") ?? "");
+    const [excludedPathsValue, setExcludedPathsValue] = useState(initial?.excludedPaths?.join(", ") ?? "");
 
     const copyHeadersValue =
         initial && initial.copyHeaders.length > 0 ? initial.copyHeaders.join("\n") : AUTHENTIK_DEFAULT_HEADERS.join("\n");
@@ -81,6 +83,9 @@ export function AuthentikFields({
             ? initial.trustedProxies.join("\n")
             : AUTHENTIK_DEFAULT_TRUSTED_PROXIES.join("\n");
     const setHostHeaderDefault = initial?.setOutpostHostHeader ?? true;
+
+    const protectedPathsDisabled = !enabled || excludedPathsValue.trim() !== "";
+    const excludedPathsDisabled = !enabled || protectedPathsValue.trim() !== "";
 
     return (
         <div className="rounded-lg border border-primary bg-primary/5 p-4">
@@ -161,12 +166,31 @@ export function AuthentikFields({
                             <Textarea
                                 name="authentik_protected_paths"
                                 placeholder="/secret/*, /admin/*"
-                                defaultValue={initial?.protectedPaths?.join(", ") ?? ""}
-                                disabled={!enabled}
+                                value={protectedPathsValue}
+                                onChange={(e) => setProtectedPathsValue(e.target.value)}
+                                disabled={protectedPathsDisabled}
                                 rows={2}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                                Leave empty to protect entire domain. Specify paths to protect specific routes only.
+                                {excludedPathsValue.trim() !== ""
+                                    ? "Not available when Excluded Paths is set."
+                                    : "Leave empty to protect entire domain. Specify paths to protect specific routes only."}
+                            </p>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
+                            <Textarea
+                                name="authentik_excluded_paths"
+                                placeholder="/share/*, /api/public/*"
+                                value={excludedPathsValue}
+                                onChange={(e) => setExcludedPathsValue(e.target.value)}
+                                disabled={excludedPathsDisabled}
+                                rows={2}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {protectedPathsValue.trim() !== ""
+                                    ? "Not available when Protected Paths is set."
+                                    : "Paths that bypass authentication when the entire domain is protected."}
                             </p>
                         </div>
                         <HiddenCheckboxField

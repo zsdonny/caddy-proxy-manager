@@ -187,6 +187,7 @@ export type ProxyHostAuthentikConfig = {
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
   protectedPaths: string[] | null;
+  excludedPaths: string[] | null;
 };
 
 export type ProxyHostAuthentikInput = {
@@ -198,6 +199,7 @@ export type ProxyHostAuthentikInput = {
   trustedProxies?: string[] | null;
   setOutpostHostHeader?: boolean | null;
   protectedPaths?: string[] | null;
+  excludedPaths?: string[] | null;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -209,6 +211,7 @@ type ProxyHostAuthentikMeta = {
   trusted_proxies?: string[];
   set_outpost_host_header?: boolean;
   protected_paths?: string[];
+  excluded_paths?: string[];
 };
 
 export type MtlsConfig = {
@@ -709,6 +712,17 @@ function normalizeAuthentikInput(
     }
   }
 
+  if (input.excludedPaths !== undefined) {
+    const paths = (input.excludedPaths ?? [])
+      .map((path) => path?.trim())
+      .filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      next.excluded_paths = paths;
+    } else {
+      delete next.excluded_paths;
+    }
+  }
+
   if ((next.enabled ?? false) && next.outpost_domain && !next.auth_endpoint) {
     next.auth_endpoint = `/${next.outpost_domain}/auth/caddy`;
   }
@@ -1136,6 +1150,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
     meta.set_outpost_host_header !== undefined ? Boolean(meta.set_outpost_host_header) : true;
   const protectedPaths =
     Array.isArray(meta.protected_paths) && meta.protected_paths.length > 0 ? meta.protected_paths : null;
+  const excludedPaths =
+    Array.isArray(meta.excluded_paths) && meta.excluded_paths.length > 0 ? meta.excluded_paths : null;
 
   return {
     enabled,
@@ -1145,7 +1161,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
     copyHeaders,
     trustedProxies,
     setOutpostHostHeader,
-    protectedPaths
+    protectedPaths,
+    excludedPaths
   };
 }
 
@@ -1176,6 +1193,9 @@ function dehydrateAuthentik(config: ProxyHostAuthentikConfig | null): ProxyHostA
   meta.set_outpost_host_header = config.setOutpostHostHeader;
   if (config.protectedPaths && config.protectedPaths.length > 0) {
     meta.protected_paths = [...config.protectedPaths];
+  }
+  if (config.excludedPaths && config.excludedPaths.length > 0) {
+    meta.excluded_paths = [...config.excludedPaths];
   }
 
   return meta;
