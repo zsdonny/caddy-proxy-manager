@@ -262,6 +262,7 @@ export async function getTopWafRulesWithHosts(from: number, to: number, limit = 
           hostMap.set(host, (hostMap.get(host) ?? 0) + cnt);
         }
         const hosts = Array.from(hostMap.entries())
+          .filter(([, count]) => count > 0)
           .sort(([, a], [, b]) => b - a)
           .map(([host, count]) => ({ host, count }));
 
