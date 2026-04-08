@@ -204,6 +204,16 @@ function isL4ProxyHost(value: unknown): value is NonNullable<SyncPayload["data"]
   );
 }
 
+function isUserPreference(value: unknown): value is NonNullable<SyncPayload["data"]["userPreferences"]>[number] {
+  if (!isRecord(value)) return false;
+  return (
+    isNumber(value.userId) &&
+    isString(value.key) &&
+    isString(value.value) &&
+    isString(value.updatedAt)
+  );
+}
+
 /**
  * Validates that the payload has the expected structure for syncing
  */
@@ -238,6 +248,11 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
 
   // l4ProxyHosts is optional for backward compatibility with older master instances
   if (d.l4ProxyHosts !== undefined && !validateArray(d.l4ProxyHosts, isL4ProxyHost)) {
+    return false;
+  }
+
+  // userPreferences is optional for backward compatibility with older primary instances
+  if (d.userPreferences !== undefined && !validateArray(d.userPreferences, isUserPreference)) {
     return false;
   }
 
