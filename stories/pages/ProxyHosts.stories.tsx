@@ -356,12 +356,19 @@ export const Default: Story = {
 export const StickyActionsNarrow: Story = {
   name: '▶ Sticky actions — narrow desktop',
   args: {
-    ...Default.args,
+    hosts: mockHosts,
+    certificates: [],
+    accessLists: [],
+    caCertificates: [],
+    authentikDefaults: null,
+    pagination: { total: mockHosts.length, page: 1, perPage: 25 },
+    initialSearch: '',
+    initialSort: { sortBy: 'name', sortDir: 'asc' },
+    ruleSets: mockRuleSets,
   },
   globals: {
     viewport: { value: 'narrow-desktop' },
   },
-  decorators: [withDashboardLayout],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 

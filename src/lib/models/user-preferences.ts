@@ -8,6 +8,9 @@ import { and, eq } from "drizzle-orm";
 
 export type FolderItem = {
   name: string;
+  icon?: string;
+  color?: string;
+  collapsed?: boolean;
   itemIds: string[];
 };
 

@@ -16,6 +16,8 @@ import {
 export type FolderItem = {
   id: string;
   name: string;
+  icon?: string;
+  color?: string;
   collapsed: boolean;
   itemIds: string[];
 };
@@ -35,6 +37,8 @@ export type UseFolderStateReturn<T> = {
   commitRename: (id: string, name: string) => void;
   cancelRename: () => void;
   renamingFolderId: string | null;
+  /** Update icon and/or color for a folder. */
+  setFolderAppearance: (id: string, patch: { icon?: string; color?: string }) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -66,7 +70,9 @@ export function useFolderState<T extends { id: number | string }>(
     return initialData.folders.map((f, i) => ({
       id: `f-${uid}-init-${i}`,
       name: f.name,
-      collapsed: false,
+      icon: f.icon,
+      color: f.color,
+      collapsed: f.collapsed ?? false,
       itemIds: f.itemIds,
     }));
   });
@@ -95,7 +101,7 @@ export function useFolderState<T extends { id: number | string }>(
   const emitChange = useCallback(
     (nextFolders: FolderItem[], nextUngrouped: string[]) => {
       onStateChange?.({
-        folders: nextFolders.map(f => ({ name: f.name, itemIds: f.itemIds })),
+        folders: nextFolders.map(f => ({ name: f.name, icon: f.icon, color: f.color, collapsed: f.collapsed, itemIds: f.itemIds })),
         ungrouped: nextUngrouped,
       });
     },
@@ -107,9 +113,14 @@ export function useFolderState<T extends { id: number | string }>(
   // ---------------------------------------------------------------------------
 
   const toggleFolder = useCallback(
-    (id: string) =>
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, collapsed: !f.collapsed } : f)),
-    [],
+    (id: string) => {
+      setFolders(prev => {
+        const next = prev.map(f => f.id === id ? { ...f, collapsed: !f.collapsed } : f);
+        emitChange(next, ungroupedRef.current);
+        return next;
+      });
+    },
+    [emitChange],
   );
 
   const moveItem = useCallback(
@@ -197,6 +208,17 @@ export function useFolderState<T extends { id: number | string }>(
 
   const cancelRename = useCallback(() => setRenamingFolderId(null), []);
 
+  const setFolderAppearance = useCallback(
+    (id: string, patch: { icon?: string; color?: string }) => {
+      const next = foldersRef.current.map(f =>
+        f.id === id ? { ...f, ...patch } : f,
+      );
+      emitChange(next, ungroupedRef.current);
+      setFolders(next);
+    },
+    [emitChange],
+  );
+
   return {
     folders,
     ungrouped,
@@ -210,5 +232,6 @@ export function useFolderState<T extends { id: number | string }>(
     commitRename,
     cancelRename,
     renamingFolderId,
+    setFolderAppearance,
   };
 }

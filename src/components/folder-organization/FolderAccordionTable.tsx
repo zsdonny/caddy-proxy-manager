@@ -36,8 +36,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  FolderOpen,
-  FolderClosed,
   ChevronDown,
   ChevronRight,
   ArrowUp,
@@ -52,8 +50,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { AppDialog } from "@/components/ui/AppDialog";
 import { cn } from "@/lib/utils";
 import type { UseFolderStateReturn, FolderItem } from "./useFolderState";
+import {
+  FolderIconColorPicker,
+  getFolderIcon,
+  getFolderColorClass,
+} from "./FolderIconColorPicker";
 import {
   enc, dec,
   type DragId,
@@ -85,6 +89,12 @@ export type FolderColumn<T> = {
 // ---------------------------------------------------------------------------
 
 export type SortState = { columnId: string; dir: "asc" | "desc" } | null;
+
+// ---------------------------------------------------------------------------
+// Context: disable DnD
+// ---------------------------------------------------------------------------
+
+const DndDisabledCtx = React.createContext(false);
 
 // ---------------------------------------------------------------------------
 // Responsive hook — avoids duplicate sortable registrations
@@ -190,17 +200,20 @@ function ItemRowContentImpl<T extends { id: number | string }>({
   attributes: React.HTMLAttributes<HTMLElement>;
   inGroup: boolean;
 }) {
+  const dndDisabled = React.useContext(DndDisabledCtx);
   return (
     <>
-      <div
-        className={cn(
-          "h-full flex items-center mr-1 shrink-0 text-muted-foreground/40 transition-colors",
-          inGroup ? "group-hover:text-muted-foreground/70" : "group-hover:text-muted-foreground/70",
-        )}
-        {...attributes}
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </div>
+      {!dndDisabled && (
+        <div
+          className={cn(
+            "h-full flex items-center mr-1 shrink-0 text-muted-foreground/40 transition-colors",
+            inGroup ? "group-hover:text-muted-foreground/70" : "group-hover:text-muted-foreground/70",
+          )}
+          {...attributes}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </div>
+      )}
       {columns.map(col => (
         <div key={col.id} className={col.className}>
           {col.render(item)}
@@ -339,7 +352,8 @@ function MobileItemCardImpl<T extends { id: number | string }>({
     transform, transition, isDragging,
   } = useSortable({ id });
 
-  const dragHandle = (
+  const dndDisabled = React.useContext(DndDisabledCtx);
+  const dragHandle = dndDisabled ? null : (
     <div
       ref={setActivatorNodeRef}
       {...attributes}
@@ -398,6 +412,7 @@ function FolderRow({
   onStartRename,
   onCommitRename,
   onCancelRename,
+  onAppearanceChange,
 }: {
   folder: FolderItem;
   isOver: boolean;
@@ -411,30 +426,36 @@ function FolderRow({
   onStartRename: () => void;
   onCommitRename: (n: string) => void;
   onCancelRename: () => void;
+  onAppearanceChange: (patch: { icon?: string; color?: string }) => void;
 }) {
   const [draft, setDraft] = useState(folder.name);
   React.useEffect(() => setDraft(folder.name), [folder.name]);
+  const dndDisabled = React.useContext(DndDisabledCtx);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   return (
+    <>
     <div
       ref={activatorRef}
-      {...(isRenaming ? {} : dragListeners)}
+      {...(isRenaming || dndDisabled ? {} : dragListeners)}
       className={cn(
         ROW_BASE,
         "group/folder h-10 select-none px-3",
-        isRenaming ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+        isRenaming || dndDisabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         "transition-colors duration-150",
         isOver && !isDraggingFolder ? "bg-muted/50" : "bg-muted/20 hover:bg-muted/35",
       )}
     >
       {/* Drag handle (visual + a11y) */}
-      <div
-        className="h-full flex items-center mr-1 shrink-0 text-muted-foreground/40 group-hover/folder:text-muted-foreground/70 transition-colors"
-        {...dragAttributes}
-        title="Drag to reorder folder"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </div>
+      {!dndDisabled && (
+        <div
+          className="h-full flex items-center mr-1 shrink-0 text-muted-foreground/40 group-hover/folder:text-muted-foreground/70 transition-colors"
+          {...dragAttributes}
+          title="Drag to reorder folder"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </div>
+      )}
 
       {/* Chevron toggle */}
       <button
@@ -449,14 +470,22 @@ function FolderRow({
         )}
       </button>
 
-      {/* Folder icon */}
-      <span className="ml-1 shrink-0">
-        {folder.collapsed ? (
-          <FolderClosed className="h-4 w-4 text-amber-400" />
-        ) : (
-          <FolderOpen className="h-4 w-4 text-amber-400" />
-        )}
-      </span>
+      {/* Folder icon — click to open icon/color picker */}
+      <FolderIconColorPicker
+        icon={folder.icon}
+        color={folder.color}
+        onChange={onAppearanceChange}
+      >
+        <button
+          className="ml-1 shrink-0 rounded p-0.5 hover:bg-muted transition-colors"
+          title="Change icon & color"
+          onClick={e => e.stopPropagation()}
+        >
+          {React.createElement(getFolderIcon(folder.icon), {
+            className: cn("h-4 w-4", getFolderColorClass(folder.color)),
+          })}
+        </button>
+      </FolderIconColorPicker>
 
       {/* Name / rename input */}
       {isRenaming ? (
@@ -519,7 +548,7 @@ function FolderRow({
               size="icon"
               variant="ghost"
               className="h-6 w-6 text-destructive/60 hover:text-destructive"
-              onClick={onDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               title="Delete (items return to ungrouped)"
             >
               <Trash2 className="h-3 w-3" />
@@ -528,6 +557,34 @@ function FolderRow({
         )}
       </div>
     </div>
+
+    <AppDialog
+      open={showDeleteConfirm}
+      onClose={() => setShowDeleteConfirm(false)}
+      title="Delete folder"
+      maxWidth="xs"
+      actions={
+        <>
+          <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
+          >
+            Delete
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted-foreground">
+        Delete <span className="font-medium text-foreground">{folder.name}</span>?
+        {folder.itemIds.length > 0 && (
+          <> Its {folder.itemIds.length} {folder.itemIds.length === 1 ? "item" : "items"} will return to ungrouped.</>
+        )}
+      </p>
+    </AppDialog>
+    </>
   );
 }
 
@@ -574,6 +631,7 @@ function FolderSection<T extends { id: number | string }>({
   onStartRename,
   onCommitRename,
   onCancelRename,
+  onAppearanceChange,
 }: {
   folder: FolderItem;
   itemsById: Record<string, T>;
@@ -591,6 +649,7 @@ function FolderSection<T extends { id: number | string }>({
   onStartRename: () => void;
   onCommitRename: (name: string) => void;
   onCancelRename: () => void;
+  onAppearanceChange: (patch: { icon?: string; color?: string }) => void;
 }) {
   // Sortable — allows folder reorder via row-shift animation within a parent
   // SortableContext.  Also serves as a droppable target for items being dragged
@@ -635,6 +694,7 @@ function FolderSection<T extends { id: number | string }>({
         onStartRename={onStartRename}
         onCommitRename={onCommitRename}
         onCancelRename={onCancelRename}
+        onAppearanceChange={onAppearanceChange}
       />
 
       <Accordion open={!folder.collapsed}>
@@ -689,6 +749,7 @@ function MobileFolderSection<T extends { id: number | string }>({
   onStartRename,
   onCommitRename,
   onCancelRename,
+  onAppearanceChange,
 }: {
   folder: FolderItem;
   itemsById: Record<string, T>;
@@ -705,6 +766,7 @@ function MobileFolderSection<T extends { id: number | string }>({
   onStartRename: () => void;
   onCommitRename: (name: string) => void;
   onCancelRename: () => void;
+  onAppearanceChange: (patch: { icon?: string; color?: string }) => void;
 }) {
   const sortableId = enc({ kind: "folder", folderId: folder.id });
   const {
@@ -745,6 +807,7 @@ function MobileFolderSection<T extends { id: number | string }>({
         onStartRename={onStartRename}
         onCommitRename={onCommitRename}
         onCancelRename={onCancelRename}
+        onAppearanceChange={onAppearanceChange}
       />
       <Accordion open={!folder.collapsed}>
         {displayItemIds.length === 0 ? (
@@ -844,6 +907,8 @@ export type FolderAccordionTableProps<T extends { id: number | string }> = {
   emptyMessage?: string;
   sort?: SortState;
   onSort?: (columnId: string) => void;
+  /** When true, disables all drag-and-drop (no sensors, no grip handles). */
+  disableDnd?: boolean;
 };
 
 export function FolderAccordionTable<T extends { id: number | string }>({
@@ -858,6 +923,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
   emptyMessage = "No items",
   sort,
   onSort,
+  disableDnd = false,
 }: FolderAccordionTableProps<T>) {
   const { folders, ungrouped } = folderState;
 
@@ -885,10 +951,11 @@ export function FolderAccordionTable<T extends { id: number | string }>({
 
   const isDesktop = useIsDesktop();
 
-  const sensors = useSensors(
+  const activeSensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   );
+  const noopSensors = useSensors();
 
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -920,6 +987,12 @@ export function FolderAccordionTable<T extends { id: number | string }>({
     if (!activeDrag || activeDrag.kind !== "item") return undefined;
     return itemsById[activeDrag.itemId];
   }, [activeDrag, itemsById]);
+
+  // The dragged folder (undefined for item drags) — used for ghost pill icon/color.
+  const activeDragFolder = React.useMemo((): FolderItem | undefined => {
+    if (!activeDrag || activeDrag.kind !== "folder") return undefined;
+    return folders.find(f => f.id === activeDrag.folderId);
+  }, [activeDrag, folders]);
 
   // Stable refs so collisionDetection/handleDragEnd never capture stale data.
   const foldersRef = useRef(folders);
@@ -998,10 +1071,17 @@ export function FolderAccordionTable<T extends { id: number | string }>({
       // Item drag — strict priority chain
       const pointerCandidates = pointerWithin(args);
 
-      // Build ID sets for classification
+      // Build ID sets for classification.
+      // IMPORTANT: Exclude items inside collapsed folders. The Accordion uses
+      // grid-rows-[0fr] + overflow:hidden — visually collapsed, but
+      // getBoundingClientRect() still reports the items' full natural rects.
+      // Those ghost rects bleed into subsequent folders and steal pointer hits,
+      // causing items to land in the wrong container.
       const allItemIds = new Set<string>();
       for (const f of foldersRef.current) {
-        for (const id of f.itemIds) allItemIds.add(enc({ kind: "item", itemId: id }));
+        if (!f.collapsed) {
+          for (const id of f.itemIds) allItemIds.add(enc({ kind: "item", itemId: id }));
+        }
       }
       for (const id of ungroupedRef.current) allItemIds.add(enc({ kind: "item", itemId: id }));
 
@@ -1039,8 +1119,16 @@ export function FolderAccordionTable<T extends { id: number | string }>({
         return ungroupedCandidates;
       }
 
-      // 4. Nothing under pointer — use rect intersection as last resort
-      return rectIntersection(args);
+      // 4. Nothing under pointer (e.g. the gap between folder cards).
+      // Only test against folder + ungrouped containers — NOT individual items.
+      // rectIntersection on all containers would match items from nearby
+      // folders whose rects partially overlap the pointer region, routing the
+      // drop to the wrong container.
+      const containerOnlyContainers = args.droppableContainers.filter(c => {
+        const id = String(c.id);
+        return folderSortableIds.has(id) || id === "__ungrouped__";
+      });
+      return rectIntersection({ ...args, droppableContainers: containerOnlyContainers });
     },
     [], // stable — reads via refs above
   );
@@ -1141,8 +1229,9 @@ export function FolderAccordionTable<T extends { id: number | string }>({
   })();
 
   return (
+    <DndDisabledCtx.Provider value={disableDnd}>
     <DndContext
-      sensors={sensors}
+      sensors={disableDnd ? noopSensors : activeSensors}
       collisionDetection={collisionDetection}
       onDragStart={({ active }: DragStartEvent) => {
         setActiveId(String(active.id));
@@ -1199,6 +1288,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                   onStartRename={() => folderState.startRename(folder.id)}
                   onCommitRename={name => folderState.commitRename(folder.id, name)}
                   onCancelRename={folderState.cancelRename}
+                  onAppearanceChange={patch => folderState.setFolderAppearance(folder.id, patch)}
                 />
               ))}
             </SortableContext>
@@ -1260,6 +1350,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                     onStartRename={() => folderState.startRename(folder.id)}
                     onCommitRename={name => folderState.commitRename(folder.id, name)}
                     onCancelRename={folderState.cancelRename}
+                    onAppearanceChange={patch => folderState.setFolderAppearance(folder.id, patch)}
                   />
                 ))}
               </SortableContext>
@@ -1303,7 +1394,9 @@ export function FolderAccordionTable<T extends { id: number | string }>({
             )}
           >
             {isDraggingFolder ? (
-              <FolderOpen className="h-4 w-4 text-amber-400 shrink-0" />
+              React.createElement(getFolderIcon(activeDragFolder?.icon), {
+                className: cn("h-4 w-4 shrink-0", getFolderColorClass(activeDragFolder?.color)),
+              })
             ) : (
               <>
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
@@ -1322,5 +1415,6 @@ export function FolderAccordionTable<T extends { id: number | string }>({
         )}
       </DragOverlay>
     </DndContext>
+    </DndDisabledCtx.Provider>
   );
 }
