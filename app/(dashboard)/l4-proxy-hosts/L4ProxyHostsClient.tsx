@@ -41,13 +41,9 @@ type Props = {
   caCertificates?: CaCertificate[];
 };
 
-function formatMatcher(host: L4ProxyHost): string {
-  switch (host.matcher_type) {
-    case "tls_sni":    return `SNI: ${host.matcher_value.join(", ")}`;
-    case "http_host":  return `Host: ${host.matcher_value.join(", ")}`;
-    case "proxy_protocol": return "Proxy Protocol";
-    default:           return "None";
-  }
+function formatMatcher(host: L4ProxyHost): string | null {
+  if (host.matcher_type === "tls_sni") return `SNI: ${host.matcher_value.join(", ")}`;
+  return null;
 }
 
 function ProtocolBadge({ protocol }: { protocol: string }) {
@@ -247,9 +243,9 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
       label: "Name / Matcher",
       sortKey: "name",
       render: (host: L4ProxyHost) => (
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div className={[
-            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
             host.protocol === "tcp"
               ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
               : "border-amber-500/30 bg-amber-500/10 text-amber-500",
@@ -258,7 +254,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
           </div>
           <div>
             <p className="text-sm font-semibold leading-tight">{host.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{formatMatcher(host)}</p>
+            {formatMatcher(host) && <p className="text-xs text-muted-foreground mt-0.5">{formatMatcher(host)}</p>}
           </div>
         </div>
       ),

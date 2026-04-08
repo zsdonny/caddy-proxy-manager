@@ -239,10 +239,10 @@ function L4FolderDemo({
     const currentFolderId = folderStateRef.current.folders.find(f => f.itemIds.includes(String(host.id)))?.id ?? null;
     return (
       <Card className={[
-        "border-l-2",
+        "border-l-2 overflow-hidden",
         host.protocol === "tcp" ? "border-l-cyan-500" : "border-l-amber-500",
       ].join(" ")}>
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           <div className="flex items-start justify-between gap-2">
             {dragHandle}
             <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -350,7 +350,7 @@ function L4FolderDemo({
   const featuresHeaderContent = useMemo(() => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium uppercase text-xs tracking-wide">
+        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium text-xs tracking-wide">
           Features
           <ListFilter className={`ml-1 h-3.5 w-3.5 ${featureFilters.size > 0 ? "text-primary" : "opacity-50"}`} />
           {featureFilters.size > 0 && (
@@ -385,12 +385,12 @@ function L4FolderDemo({
     {
       id: "name",
       label: "Name / Protocol",
-      className: "flex-1 min-w-[180px] flex items-start gap-3 py-2 pr-3 overflow-hidden",
+      className: "flex-1 min-w-[180px] flex items-center gap-3 py-2 pr-3 overflow-hidden",
       sortFn: host => host.name.toLowerCase(),
       render: host => (
         <>
           <div className={[
-            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
             host.protocol === "tcp"
               ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
               : "border-amber-500/30 bg-amber-500/10 text-amber-500",
@@ -399,9 +399,11 @@ function L4FolderDemo({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight truncate">{host.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              {host.matcher_type === "none" ? "None" : host.matcher_value[0] ?? "None"}
-            </p>
+            {host.matcher_type === "tls_sni" && (
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                SNI: {host.matcher_value.join(", ")}
+              </p>
+            )}
           </div>
         </>
       ),
@@ -532,6 +534,17 @@ function L4FolderDemo({
         folderState={folderState}
         columns={columns}
         itemLabel={h => h.name}
+        itemSubLabel={h => h.listen_address}
+        itemIcon={h => (
+          <div className={[
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            h.protocol === "tcp"
+              ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-500",
+          ].join(" ")}>
+            <Network className="h-3.5 w-3.5" />
+          </div>
+        )}
         mobileCard={mobileCard}
         emptyMessage={searchTerm || featureFilters.size > 0 ? "No hosts match your filters" : "No L4 proxy hosts"}
         sort={sort}

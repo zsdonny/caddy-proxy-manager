@@ -292,10 +292,10 @@ function ProxyHostFolderDemo({
     const currentFolderId = folderStateRef.current.folders.find(f => f.itemIds.includes(String(host.id)))?.id ?? null;
     return (
       <Card className={[
-        "border-l-2",
+        "border-l-2 overflow-hidden",
         getEnabled(host) ? "border-l-emerald-500" : "border-l-zinc-500/30",
       ].join(" ")}>
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           <div className="flex items-start justify-between gap-2">
             {dragHandle}
             <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -403,7 +403,7 @@ function ProxyHostFolderDemo({
   const featuresHeaderContent = useMemo(() => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium uppercase text-xs tracking-wide">
+        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium text-xs tracking-wide">
           Features
           <ListFilter className={`ml-1 h-3.5 w-3.5 ${featureFilters.size > 0 ? "text-primary" : "opacity-50"}`} />
           {featureFilters.size > 0 && (
@@ -572,6 +572,17 @@ function ProxyHostFolderDemo({
         folderState={folderState}
         columns={columns}
         itemLabel={h => h.name}
+        itemSubLabel={h => h.domains[0] ?? ""}
+        itemIcon={h => (
+          <div className={[
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            getEnabled(h)
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+              : "border-zinc-500/20 bg-zinc-500/10 text-zinc-400",
+          ].join(" ")}>
+            <Globe className="h-3.5 w-3.5" />
+          </div>
+        )}
         mobileCard={mobileCard}
         emptyMessage={searchTerm || featureFilters.size > 0 ? "No hosts match your filters" : "No proxy hosts"}
         sort={sort}

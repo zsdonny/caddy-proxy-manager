@@ -87,13 +87,9 @@ const L4_FILTER_ICONS: Record<L4FeatureKey, React.ReactNode> = {
 // Badge components
 // ---------------------------------------------------------------------------
 
-function formatMatcher(host: L4ProxyHost): string {
-  switch (host.matcher_type) {
-    case "tls_sni": return `SNI: ${host.matcher_value.join(", ")}`;
-    case "http_host": return `Host: ${host.matcher_value.join(", ")}`;
-    case "proxy_protocol": return "Proxy Protocol";
-    default: return "None";
-  }
+function formatMatcher(host: L4ProxyHost): string | null {
+  if (host.matcher_type === "tls_sni") return `SNI: ${host.matcher_value.join(", ")}`;
+  return null;
 }
 
 function ProtocolBadge({ protocol }: { protocol: string }) {
@@ -243,7 +239,7 @@ export default function L4ProxyHostsFolderClient({
       entries = entries.filter(([, h]) =>
         h.name.toLowerCase().includes(q) ||
         h.listen_address.includes(q) ||
-        formatMatcher(h).toLowerCase().includes(q),
+        (formatMatcher(h) ?? "").toLowerCase().includes(q),
       );
     }
     if (featureFilters.size > 0) {
@@ -261,7 +257,7 @@ export default function L4ProxyHostsFolderClient({
   const featuresHeaderContent = useMemo(() => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium uppercase text-xs tracking-wide">
+        <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium text-xs tracking-wide">
           Features
           <ListFilter className={`ml-1 h-3.5 w-3.5 ${featureFilters.size > 0 ? "text-primary" : "opacity-50"}`} />
           {featureFilters.size > 0 && (
@@ -298,12 +294,12 @@ export default function L4ProxyHostsFolderClient({
     {
       id: "name",
       label: "Name / Matcher",
-      className: "flex-1 min-w-[200px] flex items-start gap-3 py-2 pr-3 overflow-hidden",
+      className: "flex-1 min-w-[200px] flex items-center gap-3 py-2 pr-3 overflow-hidden",
       sortFn: host => host.name.toLowerCase(),
       render: host => (
         <>
           <div className={[
-            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
             host.protocol === "tcp"
               ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
               : "border-amber-500/30 bg-amber-500/10 text-amber-500",
@@ -312,7 +308,7 @@ export default function L4ProxyHostsFolderClient({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight truncate">{host.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{formatMatcher(host)}</p>
+            {formatMatcher(host) && <p className="text-xs text-muted-foreground mt-0.5 truncate">{formatMatcher(host)}</p>}
           </div>
         </>
       ),
@@ -448,7 +444,7 @@ export default function L4ProxyHostsFolderClient({
       folderStateRef.current.folders.find(f => f.itemIds.includes(String(host.id)))?.id ?? null;
     return (
       <Card className={[
-        "border-l-2",
+        "border-l-2 overflow-hidden",
         host.protocol === "tcp" ? "border-l-cyan-500" : "border-l-amber-500",
       ].join(" ")}>
         <CardContent className="p-3">
@@ -551,6 +547,17 @@ export default function L4ProxyHostsFolderClient({
         folderState={folderState}
         columns={columns}
         itemLabel={h => h.name}
+        itemSubLabel={h => h.listen_address}
+        itemIcon={h => (
+          <div className={[
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            h.protocol === "tcp"
+              ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-500",
+          ].join(" ")}>
+            <Network className="h-3.5 w-3.5" />
+          </div>
+        )}
         mobileCard={mobileCard}
         emptyMessage={hasFilters ? "No hosts match your filters" : "No L4 proxy hosts"}
         sort={sort}

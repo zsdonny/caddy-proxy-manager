@@ -228,12 +228,15 @@ function ItemRowImpl<T extends { id: number | string }>({
   columns,
   animDelay,
   inGroup = false,
+  isLeaving = false,
 }: {
   item: T;
   itemId: string;
   columns: FolderColumn<T>[];
   animDelay?: number;
   inGroup?: boolean;
+  /** True when this item is being dragged to a different container — collapse its placeholder. */
+  isLeaving?: boolean;
 }) {
   const id = enc({ kind: "item", itemId });
   const {
@@ -250,7 +253,12 @@ function ItemRowImpl<T extends { id: number | string }>({
     />
   );
 
-  return (
+  // When the item is being dragged to another container, collapse its height
+  // smoothly via grid-template-rows. The SortableContext items stay stable
+  // (no measureRects loop) — this is purely visual.
+  const shouldCollapse = isDragging && isLeaving;
+
+  const inner = (
     <div
       ref={setNodeRef}
       {...listeners}
@@ -265,11 +273,12 @@ function ItemRowImpl<T extends { id: number | string }>({
           ? ROW_BASE
           : "rounded-md ring-1 ring-border bg-card shadow-sm overflow-hidden",
         inGroup && "group select-none px-3 cursor-grab active:cursor-grabbing transition-colors duration-100",
-        inGroup && "border-b last:border-b-0 hover:bg-muted/40",
+        inGroup && "hover:bg-muted/40",
+        inGroup && "border-t",
         !inGroup && "cursor-grab active:cursor-grabbing select-none",
         animDelay !== undefined &&
           "animate-in fade-in slide-in-from-top-1 duration-150 fill-mode-both",
-        isDragging && "scale-[0.99] z-10",
+        isDragging && "z-10",
       )}
     >
       {inGroup ? (
@@ -286,6 +295,22 @@ function ItemRowImpl<T extends { id: number | string }>({
       )}
     </div>
   );
+
+  // Only wrap in grid collapse when this item is actively being dragged.
+  // Non-dragged items render without the wrapper to avoid clipping transforms
+  // during same-container reorder and to preserve ungrouped card styling.
+  if (!isDragging) return inner;
+
+  return (
+    <div
+      className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+      style={{ gridTemplateRows: shouldCollapse ? "0fr" : "1fr" }}
+    >
+      <div className="overflow-hidden">
+        {inner}
+      </div>
+    </div>
+  );
 }
 // Memo wrapper — preserves generic signature via cast
 const ItemRow = React.memo(ItemRowImpl) as typeof ItemRowImpl;
@@ -300,10 +325,13 @@ function MobileItemCardImpl<T extends { id: number | string }>({
   item,
   itemId,
   mobileCard,
+  isLeaving = false,
 }: {
   item: T;
   itemId: string;
   mobileCard: (item: T, dragHandle?: React.ReactNode) => React.ReactNode;
+  /** True when this item is being dragged to a different container — collapse its placeholder. */
+  isLeaving?: boolean;
 }) {
   const id = enc({ kind: "item", itemId });
   const {
@@ -322,10 +350,12 @@ function MobileItemCardImpl<T extends { id: number | string }>({
     </div>
   );
 
-  return (
+  const shouldCollapse = isDragging && isLeaving;
+
+  const inner = (
     <div
       ref={setNodeRef}
-      className="select-none"
+      className="select-none min-w-0"
       style={{
         transform: CSS.Transform.toString(isDragging ? null : transform),
         transition: isDragging ? undefined : transition,
@@ -333,6 +363,19 @@ function MobileItemCardImpl<T extends { id: number | string }>({
       }}
     >
       {mobileCard(item, dragHandle)}
+    </div>
+  );
+
+  if (!isDragging) return inner;
+
+  return (
+    <div
+      className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+      style={{ gridTemplateRows: shouldCollapse ? "0fr" : "1fr" }}
+    >
+      <div className="overflow-hidden">
+        {inner}
+      </div>
     </div>
   );
 }
@@ -378,7 +421,7 @@ function FolderRow({
       {...(isRenaming ? {} : dragListeners)}
       className={cn(
         ROW_BASE,
-        "group/folder border-b h-10 select-none px-3",
+        "group/folder h-10 select-none px-3",
         isRenaming ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         "transition-colors duration-150",
         isOver && !isDraggingFolder ? "bg-muted/50" : "bg-muted/20 hover:bg-muted/35",
@@ -501,14 +544,14 @@ function Accordion({ open, children }: { open: boolean; children: React.ReactNod
   return (
     <div
       className={cn(
-        "grid transition-[grid-template-rows] duration-200 ease-out",
+        "grid transition-[grid-template-rows] duration-200 ease-out min-w-0",
         open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
       )}
       onTransitionEnd={(e) => {
         if (e.target === e.currentTarget && open) setFullyOpen(true);
       }}
     >
-      <div className={fullyOpen ? undefined : "overflow-hidden"}>{children}</div>
+      <div className={cn("min-w-0", fullyOpen ? undefined : "overflow-hidden")}>{children}</div>
     </div>
   );
 }
@@ -525,6 +568,7 @@ function FolderSection<T extends { id: number | string }>({
   isRenaming,
   isDraggingFolder,
   isOverContainer,
+  leavingItemId,
   onToggle,
   onDelete,
   onStartRename,
@@ -540,6 +584,8 @@ function FolderSection<T extends { id: number | string }>({
   isDraggingFolder: boolean;
   /** True when any dragged item is logically over this folder (parent-tracked). */
   isOverContainer: boolean;
+  /** Item ID that is leaving its source container (CSS-collapse its row). */
+  leavingItemId?: string;
   onToggle: () => void;
   onDelete: () => void;
   onStartRename: () => void;
@@ -592,7 +638,7 @@ function FolderSection<T extends { id: number | string }>({
       />
 
       <Accordion open={!folder.collapsed}>
-        {displayItemIds.length === 0 && !isOverContainer ? (
+        {displayItemIds.length === 0 ? (
           <div className="flex items-center h-9 px-4 border-t">
             <span className="text-xs text-muted-foreground/50 italic">
               Empty — drag items here
@@ -614,6 +660,7 @@ function FolderSection<T extends { id: number | string }>({
                   columns={columns}
                   inGroup
                   animDelay={i * 25}
+                  isLeaving={itemId === leavingItemId}
                 />
               );
             })}
@@ -635,6 +682,7 @@ function MobileFolderSection<T extends { id: number | string }>({
   isRenaming,
   isDraggingFolder,
   isOverContainer,
+  leavingItemId,
   mobileCard,
   onToggle,
   onDelete,
@@ -649,6 +697,8 @@ function MobileFolderSection<T extends { id: number | string }>({
   isRenaming: boolean;
   isDraggingFolder: boolean;
   isOverContainer: boolean;
+  /** Item ID that is leaving its source container (CSS-collapse its row). */
+  leavingItemId?: string;
   mobileCard: (item: T, dragHandle?: React.ReactNode) => React.ReactNode;
   onToggle: () => void;
   onDelete: () => void;
@@ -676,7 +726,7 @@ function MobileFolderSection<T extends { id: number | string }>({
         opacity: isDragging ? 0 : undefined,
       }}
       className={cn(
-        "rounded-md shadow-sm overflow-hidden transition-colors duration-150",
+        "rounded-md shadow-sm overflow-clip transition-colors duration-150",
         isOverContainer && !isDraggingFolder
           ? "ring-2 ring-primary/50 bg-primary/5"
           : "ring-1 ring-border bg-card",
@@ -697,14 +747,14 @@ function MobileFolderSection<T extends { id: number | string }>({
         onCancelRename={onCancelRename}
       />
       <Accordion open={!folder.collapsed}>
-        {displayItemIds.length === 0 && !isOverContainer ? (
+        {displayItemIds.length === 0 ? (
           <div className="flex items-center h-9 px-4 border-t">
             <span className="text-xs text-muted-foreground/50 italic">
               Empty — drag items here
             </span>
           </div>
         ) : (
-          <div className="flex flex-col gap-3 p-3 border-t">
+          <div className="flex flex-col gap-2.5 px-1.5 py-2 border-t min-w-0">
             <SortableContext
               items={sortableItems}
               strategy={verticalListSortingStrategy}
@@ -718,6 +768,7 @@ function MobileFolderSection<T extends { id: number | string }>({
                     item={item}
                     itemId={itemId}
                     mobileCard={mobileCard}
+                    isLeaving={itemId === leavingItemId}
                   />
                 );
               })}
@@ -740,7 +791,7 @@ function UngroupedDropZone({ children, className, isDragging, isOverContainer }:
       className={cn(
         "flex flex-col transition-colors duration-150",
         className || "gap-1.5",
-        isOverContainer && "bg-primary/5 rounded-md ring-1 ring-primary/30",
+        isOverContainer && "bg-primary/5 rounded-md ring-2 ring-primary/50",
         isDragging && "pt-1 min-h-[2.5rem]",
       )}
     >
@@ -779,6 +830,10 @@ export type FolderAccordionTableProps<T extends { id: number | string }> = {
   columns: FolderColumn<T>[];
   /** Returns the display label used in the drag overlay ghost card. */
   itemLabel: (item: T) => string;
+  /** Optional: returns the sub-label (e.g. FQDN) shown under the name in the ghost pill. */
+  itemSubLabel?: (item: T) => React.ReactNode;
+  /** Optional: returns the status icon node shown to the left in the ghost pill (replaces grip icon). */
+  itemIcon?: (item: T) => React.ReactNode;
   /**
    * Optional mobile card renderer. When provided, a card-based layout is shown on small
    * screens (<md breakpoint) with a GripVertical drag handle for long-press DnD.
@@ -796,6 +851,8 @@ export function FolderAccordionTable<T extends { id: number | string }>({
   folderState,
   columns,
   itemLabel,
+  itemSubLabel,
+  itemIcon,
   mobileCard,
   toolbar,
   emptyMessage = "No items",
@@ -842,6 +899,11 @@ export function FolderAccordionTable<T extends { id: number | string }>({
 
   const isDraggingFolder = activeDrag?.kind === "folder";
 
+  // Source container of the dragged item — set once on drag start, cleared on end.
+  // Used to determine if the dragged item is "leaving" its container (pointer is
+  // over a different container) so we can CSS-collapse its placeholder row.
+  const activeSourceContainerRef = useRef<string | null | undefined>(undefined);
+
   const activeDragLabel = React.useMemo((): string | null => {
     if (!activeDrag) return null;
     if (activeDrag.kind === "item") {
@@ -852,6 +914,12 @@ export function FolderAccordionTable<T extends { id: number | string }>({
     const folder = folders.find(f => f.id === activeDrag.folderId);
     return folder ? folder.name : null;
   }, [activeDrag, itemsById, itemLabel, folders]);
+
+  // The actual dragged item (undefined for folder drags) — used for ghost pill extras.
+  const activeDragItem = React.useMemo((): T | undefined => {
+    if (!activeDrag || activeDrag.kind !== "item") return undefined;
+    return itemsById[activeDrag.itemId];
+  }, [activeDrag, itemsById]);
 
   // Stable refs so collisionDetection/handleDragEnd never capture stale data.
   const foldersRef = useRef(folders);
@@ -905,44 +973,74 @@ export function FolderAccordionTable<T extends { id: number | string }>({
    * Uses refs (not closure state) so the function identity is STABLE across
    * re-renders — prevents an infinite loop where moveItem updates folders →
    * new collisionDetection instance → dnd-kit re-fires drag events → repeat.
+   *
+   * Item drag priority: items → folder → ungrouped → nothing.
+   * Strict priority prevents __ungrouped__ from ever stealing hits from folders.
    */
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
       const activeDragInfo = dec(String(args.active.id));
 
-      // Folder drag — only collide with other folder sortables
+      // Folder drag — collide with all folder sortables (including self).
+      // Including self allows closestCenter to return the active folder when
+      // the pointer is back near its original position → "undo" the swap.
+      // handleDragEnd guards with folderId !== drag.folderId for the drop.
       if (activeDragInfo?.kind === "folder") {
         const folderIds = new Set(
           foldersRef.current.map(f => enc({ kind: "folder", folderId: f.id })),
         );
-        const otherFolders = args.droppableContainers.filter(
-          c => folderIds.has(String(c.id)) && String(c.id) !== String(args.active.id),
+        const allFolders = args.droppableContainers.filter(
+          c => folderIds.has(String(c.id)),
         );
-        return closestCenter({ ...args, droppableContainers: otherFolders });
+        return closestCenter({ ...args, droppableContainers: allFolders });
       }
 
-      // Item drag — prefer item-level hits, fall back to container-level
+      // Item drag — strict priority chain
       const pointerCandidates = pointerWithin(args);
-      if (pointerCandidates.length === 0) return rectIntersection(args);
 
+      // Build ID sets for classification
       const allItemIds = new Set<string>();
       for (const f of foldersRef.current) {
         for (const id of f.itemIds) allItemIds.add(enc({ kind: "item", itemId: id }));
       }
       for (const id of ungroupedRef.current) allItemIds.add(enc({ kind: "item", itemId: id }));
 
-      const itemContainers = args.droppableContainers.filter(c =>
-        allItemIds.has(String(c.id)),
+      const folderSortableIds = new Set(
+        foldersRef.current.map(f => enc({ kind: "folder", folderId: f.id })),
       );
+
+      // 1. Items — pointer is over a sortable item row.
+      //    Only consider items whose rect contains the pointer (not ALL items
+      //    globally) so closestCenter can't pick an item from another container.
       const itemCandidates = pointerCandidates.filter(c =>
         allItemIds.has(String(c.id)),
       );
       if (itemCandidates.length > 0) {
+        const candidateIds = new Set(itemCandidates.map(c => String(c.id)));
+        const itemContainers = args.droppableContainers.filter(c =>
+          candidateIds.has(String(c.id)),
+        );
         return closestCenter({ ...args, droppableContainers: itemContainers });
       }
 
-      // No item hit — fall back to container-level hit (folder sortable / ungrouped)
-      return pointerCandidates;
+      // 2. Folder — pointer is inside a folder card (header / empty body / gap)
+      const folderCandidates = pointerCandidates.filter(c =>
+        folderSortableIds.has(String(c.id)),
+      );
+      if (folderCandidates.length > 0) {
+        return [folderCandidates[0]];
+      }
+
+      // 3. Ungrouped — pointer is inside the ungrouped zone
+      const ungroupedCandidates = pointerCandidates.filter(c =>
+        String(c.id) === "__ungrouped__",
+      );
+      if (ungroupedCandidates.length > 0) {
+        return ungroupedCandidates;
+      }
+
+      // 4. Nothing under pointer — use rect intersection as last resort
+      return rectIntersection(args);
     },
     [], // stable — reads via refs above
   );
@@ -966,6 +1064,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveId(null);
     setOverContainerId(undefined);
+    activeSourceContainerRef.current = undefined;
     if (!over) return;
 
     const drag = dec(String(active.id));
@@ -1027,6 +1126,20 @@ export function FolderAccordionTable<T extends { id: number | string }>({
     [ungroupedItemIds],
   );
 
+  // The item ID that is "leaving" its source container — pointer is over a
+  // different container.  Used to CSS-collapse its placeholder row.
+  // undefined = nothing leaving, string = item ID to collapse.
+  const leavingItemId: string | undefined = (() => {
+    if (!activeDrag || activeDrag.kind !== "item") return undefined;
+    // overContainerId: undefined = nowhere, null = ungrouped, string = folder id
+    if (overContainerId === undefined) return undefined;
+    const src = activeSourceContainerRef.current;
+    if (src === undefined) return undefined;
+    // If pointer is over the same container the item came from, not leaving
+    if (overContainerId === src) return undefined;
+    return activeDrag.itemId;
+  })();
+
   return (
     <DndContext
       sensors={sensors}
@@ -1034,6 +1147,10 @@ export function FolderAccordionTable<T extends { id: number | string }>({
       onDragStart={({ active }: DragStartEvent) => {
         setActiveId(String(active.id));
         setOverContainerId(undefined);
+        // Capture source container so we can detect "leaving"
+        const d = dec(String(active.id));
+        activeSourceContainerRef.current =
+          d?.kind === "item" ? findContainerForItem(d.itemId) : undefined;
       }}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -1076,6 +1193,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                   isRenaming={folderState.renamingFolderId === folder.id}
                   isDraggingFolder={isDraggingFolder}
                   isOverContainer={!isDraggingFolder && overContainerId === folder.id}
+                  leavingItemId={leavingItemId}
                   onToggle={() => folderState.toggleFolder(folder.id)}
                   onDelete={() => folderState.deleteFolder(folder.id)}
                   onStartRename={() => folderState.startRename(folder.id)}
@@ -1099,6 +1217,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                       item={item}
                       itemId={itemId}
                       columns={columns}
+                      isLeaving={itemId === leavingItemId}
                     />
                   );
                 })}
@@ -1134,6 +1253,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                     isRenaming={folderState.renamingFolderId === folder.id}
                     isDraggingFolder={isDraggingFolder}
                     isOverContainer={!isDraggingFolder && overContainerId === folder.id}
+                    leavingItemId={leavingItemId}
                     mobileCard={mobileCard}
                     onToggle={() => folderState.toggleFolder(folder.id)}
                     onDelete={() => folderState.deleteFolder(folder.id)}
@@ -1143,7 +1263,7 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                   />
                 ))}
               </SortableContext>
-              <UngroupedDropZone className="gap-3 px-3" isDragging={!!activeId} isOverContainer={!isDraggingFolder && overContainerId === null}>
+              <UngroupedDropZone className="gap-2.5 px-2" isDragging={!!activeId} isOverContainer={!isDraggingFolder && overContainerId === null}>
                 <SortableContext
                   items={ungroupedSortableItems}
                   strategy={verticalListSortingStrategy}
@@ -1157,12 +1277,13 @@ export function FolderAccordionTable<T extends { id: number | string }>({
                         item={item}
                         itemId={itemId}
                         mobileCard={mobileCard}
+                        isLeaving={itemId === leavingItemId}
                       />
                     );
                   })}
                 </SortableContext>
                 {ungrouped.length === 0 && !!activeId && !isDraggingFolder && (
-                  <div className="flex items-center h-8 px-3">
+                  <div className="flex items-center h-8 px-2">
                     <span className="text-xs text-muted-foreground/40 italic">Drag here to ungroup items</span>
                   </div>
                 )}
@@ -1177,16 +1298,26 @@ export function FolderAccordionTable<T extends { id: number | string }>({
         {activeDragLabel && (
           <div
             className={cn(
-              "flex items-center h-11 w-fit max-w-sm px-3 rounded-md border bg-card shadow-2xl opacity-95 pointer-events-none",
+              "flex items-center gap-2.5 h-11 w-fit max-w-sm px-3 rounded-md border bg-card shadow-2xl opacity-95 pointer-events-none",
               isDraggingFolder && "bg-muted/50",
             )}
           >
             {isDraggingFolder ? (
-              <FolderOpen className="h-4 w-4 text-amber-400 mr-2 shrink-0" />
+              <FolderOpen className="h-4 w-4 text-amber-400 shrink-0" />
             ) : (
-              <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 mr-2 shrink-0" />
+              <>
+                <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                {activeDragItem && itemIcon && itemIcon(activeDragItem)}
+              </>
             )}
-            <span className="text-sm font-medium truncate">{activeDragLabel}</span>
+            <div className="flex flex-col min-w-0 justify-center">
+              <span className="text-sm font-medium truncate leading-tight">{activeDragLabel}</span>
+              {activeDragItem && itemSubLabel && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground truncate leading-tight">
+                  {itemSubLabel(activeDragItem)}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </DragOverlay>
