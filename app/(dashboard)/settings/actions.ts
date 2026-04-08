@@ -6,7 +6,7 @@ import { applyCaddyConfig } from "@/src/lib/caddy";
 import { validateSecLangDirectives } from "@/src/lib/caddy-waf";
 import { getInstanceMode, getPrimaryToken, setPrimaryToken, setInstanceMode, syncInstances, clearReplicaState, getReplicaLastSync } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveRetentionSettings, saveFolderOrganizationSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages, reEvaluateMutedEvents } from "@/src/lib/models/waf-events";
 import { createWafRuleSet, updateWafRuleSet, deleteWafRuleSet } from "@/src/lib/models/waf-rule-sets";
@@ -882,6 +882,18 @@ export async function updateRetentionSettingsAction(_prevState: ActionResult | n
   } catch (error) {
     console.error("Failed to save retention settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save retention settings" };
+  }
+}
+
+export async function toggleFolderOrganizationAction(enabled: boolean): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    await saveFolderOrganizationSettings({ enabled });
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to toggle folder organization:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save setting" };
   }
 }
 

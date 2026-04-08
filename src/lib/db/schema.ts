@@ -70,6 +70,23 @@ export const settings = sqliteTable("settings", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const userPreferences = sqliteTable(
+  "user_preferences",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({
+    userKeyUnique: uniqueIndex("user_prefs_user_key_unique").on(table.userId, table.key),
+    userIdIdx: index("user_prefs_user_id_idx").on(table.userId),
+  })
+);
+
 export const instances = sqliteTable(
   "instances",
   {

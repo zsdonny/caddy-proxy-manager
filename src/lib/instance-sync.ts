@@ -4,6 +4,7 @@ import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
 import { applyL4Ports, getL4PortsDiff } from "./l4-ports";
+import { getAllUserPreferencesForSync, upsertUserPreferencesBulk } from "./models/user-preferences";
 
 export type InstanceMode = "standalone" | "primary" | "replica";
 
@@ -17,6 +18,7 @@ export type SyncSettings = {
   upstream_dns_resolution: unknown | null;
   waf: unknown | null;
   geoblock: unknown | null;
+  folder_organization: unknown | null;
 };
 
 export type SyncPayload = {
@@ -31,6 +33,8 @@ export type SyncPayload = {
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
     /** Optional — not present in payloads from older primary instances */
     l4ProxyHosts?: Array<typeof l4ProxyHosts.$inferSelect>;
+    /** Per-user folder arrangement preferences (optional — not present in older payloads) */
+    userPreferences?: Array<{ userId: number; key: string; value: string; updatedAt: string }>;
   };
 };
 
@@ -274,7 +278,7 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4Rows] = await Promise.all([
+  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4Rows, userPrefRows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(caCertificates),
     db.select().from(issuedClientCertificates),
@@ -282,6 +286,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     db.select().from(accessListEntries),
     db.select().from(proxyHosts),
     db.select().from(l4ProxyHosts),
+    getAllUserPreferencesForSync(),
   ]);
 
   const settings = {
@@ -294,6 +299,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     upstream_dns_resolution: await getSetting("upstream_dns_resolution"),
     waf: await getSetting("waf"),
     geoblock: await getSetting("geoblock"),
+    folder_organization: await getSetting("folder_organization"),
   };
 
   const sanitizedAccessLists = accessListRows.map((row) => ({
@@ -337,6 +343,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
       accessListEntries: accessEntryRows,
       proxyHosts: sanitizedProxyHosts,
       l4ProxyHosts: sanitizedL4ProxyHosts,
+      userPreferences: userPrefRows,
     }
   };
 }
@@ -467,6 +474,7 @@ export async function applySyncPayload(payload: SyncPayload) {
   await setSyncedSetting("upstream_dns_resolution", payload.settings.upstream_dns_resolution ?? null);
   await setSyncedSetting("waf", payload.settings.waf ?? null);
   await setSyncedSetting("geoblock", payload.settings.geoblock ?? null);
+  await setSyncedSetting("folder_organization", payload.settings.folder_organization ?? null);
 
   // better-sqlite3 is synchronous, so transaction callback must be synchronous
   db.transaction((tx) => {
@@ -506,5 +514,10 @@ export async function applySyncPayload(payload: SyncPayload) {
   const diff = await getL4PortsDiff();
   if (diff.needsApply) {
     await applyL4Ports();
+  }
+
+  // Sync user preferences (folder arrangements, etc.) — optional field for compat with older primaries
+  if (payload.data.userPreferences && payload.data.userPreferences.length > 0) {
+    await upsertUserPreferencesBulk(payload.data.userPreferences);
   }
 }

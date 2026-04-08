@@ -141,6 +141,13 @@
       "when": 1775000000000,
       "tag": "0019_rollup_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1775100000000,
+      "tag": "0020_user_preferences",
+      "breakpoints": true
     }
   ]
 }

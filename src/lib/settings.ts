@@ -251,3 +251,17 @@ export async function getRetentionSettings(): Promise<RetentionSettings | null> 
 export async function saveRetentionSettings(settings: RetentionSettings): Promise<void> {
   await setSetting("retention", settings);
 }
+
+// ─── Folder Organization ──────────────────────────────────────────────────────
+
+export type FolderOrganizationSettings = {
+  enabled: boolean;
+};
+
+export async function getFolderOrganizationSettings(): Promise<FolderOrganizationSettings | null> {
+  return await getEffectiveSetting<FolderOrganizationSettings>("folder_organization");
+}
+
+export async function saveFolderOrganizationSettings(s: FolderOrganizationSettings): Promise<void> {
+  await setSetting("folder_organization", s);
+}

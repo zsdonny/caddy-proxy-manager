@@ -358,14 +358,10 @@ export const StickyActionsNarrow: Story = {
   args: {
     ...Default.args,
   },
-  decorators: [
-    (Story) => (
-      <div style={{ maxWidth: 800, margin: '0 auto', overflow: 'hidden' }}>
-        <Story />
-      </div>
-    ),
-    withDashboardLayout,
-  ],
+  globals: {
+    viewport: { value: 'narrow-desktop' },
+  },
+  decorators: [withDashboardLayout],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 

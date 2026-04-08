@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin, Clock,
-  AlertTriangle,
+  AlertTriangle, FolderOpen,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AppDialog } from "@/components/ui/AppDialog";
 import { StatusChip } from "@/components/ui/StatusChip";
@@ -27,6 +28,7 @@ import type {
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
   RetentionSettings,
+  FolderOrganizationSettings,
 } from "@/lib/settings";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
 import {
@@ -45,6 +47,7 @@ import {
   syncReplicaInstancesAction,
   updateGeoBlockSettingsAction,
   updateRetentionSettingsAction,
+  toggleFolderOrganizationAction,
 } from "./actions";
 import { ReactNode } from "react";
 
@@ -143,6 +146,7 @@ type Props = {
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
   retention: RetentionSettings | null;
+  folderOrganization: FolderOrganizationSettings | null;
   instanceSync: {
     mode: "standalone" | "primary" | "replica";
     modeFromEnv: boolean;
@@ -190,6 +194,7 @@ export default function SettingsClient({
   upstreamDnsResolution,
   globalGeoBlock,
   retention,
+  folderOrganization,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -246,6 +251,23 @@ export default function SettingsClient({
   const [upstreamDnsResolutionOverride, setUpstreamDnsResolutionOverride] = useState(
     instanceSync.overrides.upstreamDnsResolution
   );
+
+  // ── Folder organization toggle ────────────────────────────────────────────
+  const [folderOrgEnabled, setFolderOrgEnabled] = useState(folderOrganization?.enabled ?? false);
+  const [, startFolderOrgTransition] = useTransition();
+
+  function handleFolderOrgToggle(enabled: boolean) {
+    setFolderOrgEnabled(enabled);
+    startFolderOrgTransition(async () => {
+      const result = await toggleFolderOrganizationAction(enabled);
+      if (!result.success) {
+        setFolderOrgEnabled(!enabled); // revert on failure
+        toast.error(result.message ?? "Failed to save setting");
+      } else {
+        toast.success(enabled ? "Folder organization enabled" : "Folder organization disabled");
+      }
+    });
+  }
 
   // ── Instance mode confirmation dialog ────────────────────────────────────────
   const [pendingMode, setPendingMode] = useState<string>(instanceSync.mode);
@@ -546,11 +568,12 @@ export default function SettingsClient({
               <Input
                 id="primaryDomain"
                 name="primaryDomain"
-                defaultValue={general?.primaryDomain ?? "caddyproxymanager.com"}
+                defaultValue={general?.primaryDomain ?? "example.com"}
                 required
                 disabled={isReplica && !generalOverride}
                 className="h-8 text-sm font-mono"
               />
+              <p className="text-xs text-muted-foreground">The hostname Caddy uses as its primary server name and for ACME certificate issuance.</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="acmeEmail">ACME contact email</Label>
@@ -562,12 +585,33 @@ export default function SettingsClient({
                 disabled={isReplica && !generalOverride}
                 className="h-8 text-sm"
               />
+              <p className="text-xs text-muted-foreground">Optional. Let&apos;s Encrypt sends certificate expiration warnings to this address.</p>
             </div>
           </div>
           <div className="flex justify-end">
             <Button type="submit" size="sm">Save general settings</Button>
           </div>
         </form>
+
+        {/* ── Folder organization toggle (not part of the save form) ── */}
+        <div className="border-t pt-4 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Label htmlFor="folderOrganization" className="cursor-pointer font-medium">
+                Proxy Hosts folder organization <span className="text-[10px] font-normal text-muted-foreground border rounded px-1 py-0.5 ml-1">experimental</span>
+              </Label>
+            </div>
+            <Switch
+              id="folderOrganization"
+              checked={folderOrgEnabled}
+              onCheckedChange={handleFolderOrgToggle}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground pl-6">
+            Enables drag-and-drop folder grouping, sorting, and filtering on Proxy Hosts and L4 Proxy Hosts pages. Folder arrangements are saved per user.
+          </p>
+        </div>
       </SettingSection>
 
       {/* ── Cloudflare DNS ── */}

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Globe, MoreHorizontal, ArrowRight, Lock, ShieldCheck, KeyRound, ShieldAlert, LockKeyhole, Scale, Waypoints, CornerDownRight, PenLine, FileJson, Workflow, ListFilter } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, ShieldCheck, KeyRound, ShieldAlert, LockKeyhole, Scale, Waypoints, CornerDownRight, PenLine, FileJson, Workflow, ListFilter } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -125,7 +125,6 @@ function WafBadge({ host, ruleSets = [] }: { host: ProxyHost; ruleSets?: RuleSet
 
 function ProxyFeatureBadges({ host, ruleSets = [] }: { host: ProxyHost; ruleSets?: RuleSetItem[] }) {
   const badges: React.ReactNode[] = [];
-  if (host.certificate_id) badges.push(<Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><Lock className="h-2.5 w-2.5 mr-0.5" />TLS</Badge>);
   if (host.access_list_id) badges.push(<Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0 transition-all duration-150 hover:scale-110 hover:brightness-110"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" />Auth</Badge>);
   if (host.authentik?.enabled) badges.push(<Badge key="authentik" variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-500/30 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 transition-all duration-150 hover:scale-110 hover:brightness-110"><KeyRound className="h-2.5 w-2.5 mr-0.5" />Authentik</Badge>);
   if (host.waf?.enabled) badges.push(<WafBadge key="waf" host={host} ruleSets={ruleSets} />);

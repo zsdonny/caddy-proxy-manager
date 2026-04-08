@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Preview } from '@storybook/nextjs-vite';
 import { themes } from 'storybook/theming';
+import { INITIAL_VIEWPORTS } from 'storybook/viewport';
 import { DocsContainer } from '@storybook/addon-docs/blocks';
 import '../app/globals.css';
 import { ThemeProvider } from 'next-themes';
@@ -40,6 +41,15 @@ const preview: Preview = {
     nextjs: {
       appDirectory: true,
       navigation: { pathname: '/' },
+    },
+    viewport: {
+      options: {
+        ...INITIAL_VIEWPORTS,
+        'narrow-desktop': {
+          name: 'Narrow Desktop (800px)',
+          styles: { width: '800px', height: '900px' },
+        },
+      },
     },
   },
   decorators: [
