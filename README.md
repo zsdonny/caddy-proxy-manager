@@ -11,7 +11,6 @@
 
 # Fork Notes
 
-[![Upstream Merge Check](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/feature-upstream-merge-check.yml)
 [![Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml/badge.svg?branch=develop)](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml)
 [![Storybook](https://img.shields.io/badge/Storybook-live-ff4785?logo=storybook&logoColor=white)](https://zsdonny.github.io/caddy-proxy-manager-plus/)
 

@@ -29,6 +29,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────
   enumerate:
     name: Enumerate branches
+    if: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
