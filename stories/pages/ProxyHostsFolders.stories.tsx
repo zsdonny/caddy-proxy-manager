@@ -465,7 +465,7 @@ function ProxyHostFolderDemo({
     {
       id: "upstream",
       label: "Upstream",
-      className: "w-44 shrink-0 flex items-center py-2 pr-3 overflow-hidden",
+      className: "flex-1 min-w-[11rem] flex items-center py-2 pr-3 overflow-hidden",
       render: host => host.upstreams.length === 0
         ? <span className="text-xs text-muted-foreground">—</span>
         : (
@@ -559,18 +559,11 @@ function ProxyHostFolderDemo({
         action={{ label: "Create Host", onClick: () => {} }}
       />
 
-      <div className="flex items-center gap-2">
-        <SearchField
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          placeholder="Search hosts..."
-        />
-      </div>
-
       <FolderAccordionTable
         itemsById={itemsById}
         folderState={folderState}
         columns={columns}
+        toolbar={<SearchField value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search hosts..." />}
         itemLabel={h => h.name}
         itemSubLabel={h => h.domains[0] ?? ""}
         itemIcon={h => (

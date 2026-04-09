@@ -334,7 +334,7 @@ export default function L4ProxyHostsFolderClient({
     {
       id: "upstreams",
       label: "Upstreams",
-      className: "w-44 shrink-0 flex items-center py-2 pr-3 overflow-hidden",
+      className: "flex-1 min-w-[11rem] flex items-center py-2 pr-3 overflow-hidden",
       render: host => (
         <div className="flex items-center gap-1.5 min-w-0">
           <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -534,18 +534,11 @@ export default function L4ProxyHostsFolderClient({
         action={{ label: "Create L4 Host", onClick: () => setCreateOpen(true) }}
       />
 
-      <div className="flex items-center gap-2">
-        <SearchField
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          placeholder="Search L4 hosts..."
-        />
-      </div>
-
       <FolderAccordionTable
         itemsById={itemsById}
         folderState={folderState}
         columns={columns}
+        toolbar={<SearchField value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search L4 hosts..." />}
         itemLabel={h => h.name}
         itemSubLabel={h => h.listen_address}
         itemIcon={h => (
