@@ -52,17 +52,19 @@ export function CreateHostDialog({
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
     const errorRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
 
     useEffect(() => {
         if (state.status === "success") {
             if (state.message) toast.success(state.message);
             setIsPending(false);
-            onClose();
+            onCloseRef.current();
         } else if (state.status === "error") {
             setIsPending(false);
             errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
-    }, [state.status, state.message, onClose]);
+    }, [state]);
 
     return (
         <AppDialog
@@ -210,17 +212,19 @@ export function EditHostDialog({
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
     const errorRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
 
     useEffect(() => {
         if (state.status === "success") {
             if (state.message) toast.success(state.message);
             setIsPending(false);
-            onClose();
+            onCloseRef.current();
         } else if (state.status === "error") {
             setIsPending(false);
             errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
-    }, [state.status, state.message, onClose]);
+    }, [state]);
 
     return (
         <AppDialog
@@ -345,16 +349,18 @@ export function DeleteHostDialog({
 }) {
     const [state, formAction] = useFormState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
     const [isPending, setIsPending] = useState(false);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
 
     useEffect(() => {
         if (state.status === "success") {
             if (state.message) toast.success(state.message);
             setIsPending(false);
-            onClose();
+            onCloseRef.current();
         } else if (state.status === "error") {
             setIsPending(false);
         }
-    }, [state.status, state.message, onClose]);
+    }, [state]);
 
     return (
         <AppDialog

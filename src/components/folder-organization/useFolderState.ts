@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { FolderStateData } from "@/lib/models/user-preferences";
 import {
   computeMoveItem,
@@ -82,10 +82,12 @@ export function useFolderState<T extends { id: number | string }>(
     const assigned = new Set(initialData.folders.flatMap(f => f.itemIds));
     // Items saved in the pref that aren't in any folder
     const fromPref = initialData.ungrouped.filter(id => !assigned.has(id) && allItemIds.includes(id));
-    // Items that exist now but weren't in the saved prefs at all — add at end
+    // Items that exist now but weren't in the saved prefs at all — prepend
+    // so newly-created items (which arrive newest-first from the DB) land at
+    // the top of the ungrouped list, matching the legacy view's default sort.
     const inPref = new Set([...assigned, ...initialData.ungrouped]);
     const newItems = allItemIds.filter(id => !inPref.has(id));
-    return [...fromPref, ...newItems];
+    return [...newItems, ...fromPref];
   });
 
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -107,6 +109,23 @@ export function useFolderState<T extends { id: number | string }>(
     },
     [onStateChange],
   );
+
+  // ---------------------------------------------------------------------------
+  // Reconcile newly-arrived items (e.g. after creating a host without a full
+  // page reload).  New IDs in `allItemIds` that aren't tracked anywhere yet
+  // are prepended to the ungrouped list so the most recent item lands at the
+  // top, matching the DB's desc-by-createdAt order and the legacy view.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const tracked = new Set<string>();
+    for (const f of foldersRef.current) for (const id of f.itemIds) tracked.add(id);
+    for (const id of ungroupedRef.current) tracked.add(id);
+    const newItems = allItemIds.filter(id => !tracked.has(id));
+    if (newItems.length === 0) return;
+    const nextUngrouped = [...newItems, ...ungroupedRef.current];
+    setUngrouped(nextUngrouped);
+    emitChange(foldersRef.current, nextUngrouped);
+  }, [allItemIds, emitChange]);
 
   // ---------------------------------------------------------------------------
   // Actions
