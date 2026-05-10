@@ -51,7 +51,7 @@ import {
   proxyHosts,
   l4ProxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 import { parseAuthentikConfig, DEFAULT_AUTHENTIK_HEADERS, DEFAULT_AUTHENTIK_TRUSTED_PROXIES, type ProxyHostAuthentikMeta } from "./caddy-authentik";
@@ -103,6 +103,7 @@ type ProxyHostMeta = {
   waf?: WafHostConfig;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
+  location_rules?: LocationRule[];
 };
 
 type L4Meta = {
@@ -608,6 +609,38 @@ type BuildProxyRoutesOptions = {
   globalWaf?: WafSettings | null;
 };
 
+export function buildLocationReverseProxy(
+  rule: LocationRule,
+  skipHttpsValidation: boolean,
+  preserveHostHeader: boolean
+): { safePath: string; reverseProxyHandler: Record<string, unknown> } {
+  const parsedTargets = rule.upstreams.map(parseUpstreamTarget);
+  const hasHttps = parsedTargets.some((t) => t.scheme === "https");
+
+  // Sanitize path to prevent Caddy placeholder injection
+  const safePath = rule.path.replace(/\{[^}]*\}/g, "");
+
+  const reverseProxyHandler: Record<string, unknown> = {
+    handler: "reverse_proxy",
+    upstreams: parsedTargets.map((t) => ({ dial: t.dial })),
+  };
+
+  if (preserveHostHeader) {
+    reverseProxyHandler.headers = {
+      request: { set: { Host: ["{http.request.host}"] } },
+    };
+  }
+
+  if (hasHttps) {
+    reverseProxyHandler.transport = {
+      protocol: "http",
+      tls: skipHttpsValidation ? { insecure_skip_verify: true } : {},
+    };
+  }
+
+  return { safePath, reverseProxyHandler };
+}
+
 async function buildProxyRoutes(
   rows: ProxyHostRow[],
   accessAccounts: Map<number, AccessListEntryRow[]>,
@@ -1031,14 +1064,27 @@ async function buildProxyRoutes(
             });
           }
 
+          // Location rules are unprotected (no forwardAuthHandler), matching the catch-all
+          // behavior when protected_paths is configured — only explicitly protected paths get auth.
+          const locationRules = meta.location_rules ?? [];
+          for (const rule of locationRules) {
+            const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+              rule,
+              Boolean(row.skip_https_hostname_validation),
+              Boolean(row.preserve_host_header)
+            );
+            if (!safePath) continue;
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath] }],
+              handle: [...handlers, locationProxy],
+              terminal: true,
+            });
+          }
+
           const unprotectedHandlers: Record<string, unknown>[] = [...handlers, reverseProxyHandler];
 
           hostRoutes.push({
-            match: [
-              {
-                host: domainGroup
-              }
-            ],
+            match: [{ host: domainGroup }],
             handle: unprotectedHandlers,
             terminal: true
           });
@@ -1083,6 +1129,7 @@ async function buildProxyRoutes(
           });
         }
       } else {
+        const locationRules = meta.location_rules ?? [];
         for (const domainGroup of domainGroups) {
           if (outpostRoute) {
             const outpostMatches = (outpostRoute.match as Array<Record<string, unknown>> | undefined) ?? [];
@@ -1095,32 +1142,50 @@ async function buildProxyRoutes(
             });
           }
 
+          for (const rule of locationRules) {
+            const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+              rule,
+              Boolean(row.skip_https_hostname_validation),
+              Boolean(row.preserve_host_header)
+            );
+            if (!safePath) continue;
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath] }],
+              handle: [...handlers, forwardAuthHandler, locationProxy],
+              terminal: true,
+            });
+          }
+
           const routeHandlers: Record<string, unknown>[] = [...handlers, forwardAuthHandler, reverseProxyHandler];
           const route: CaddyHttpRoute = {
-            match: [
-              {
-                host: domainGroup
-              }
-            ],
+            match: [{ host: domainGroup }],
             handle: routeHandlers,
             terminal: true
           };
-
           hostRoutes.push(route);
         }
       }
     } else {
+      const locationRules = meta.location_rules ?? [];
       for (const domainGroup of domainGroups) {
+        for (const rule of locationRules) {
+          const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+            rule,
+            Boolean(row.skip_https_hostname_validation),
+            Boolean(row.preserve_host_header)
+          );
+          if (!safePath) continue;
+          hostRoutes.push({
+            match: [{ host: domainGroup, path: [safePath] }],
+            handle: [...handlers, locationProxy],
+            terminal: true,
+          });
+        }
         const route: CaddyHttpRoute = {
-          match: [
-            {
-              host: domainGroup
-            }
-          ],
+          match: [{ host: domainGroup }],
           handle: [...handlers, reverseProxyHandler],
-          terminal: true
+          terminal: true,
         };
-
         hostRoutes.push(route);
       }
     }
