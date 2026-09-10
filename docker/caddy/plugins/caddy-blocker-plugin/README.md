@@ -1,7 +1,7 @@
 > [!NOTE]
 > **Vendored copy** of [fuomag9/caddy-blocker-plugin](https://github.com/fuomag9/caddy-blocker-plugin).
 > Kept in sync by the [Caddy Blocker Sync](https://github.com/zsdonny/caddy-proxy-manager-plus/actions/workflows/sync-caddy-blocker.yml) workflow.
-> Upstream SHA: `37e8dc1dd350ddb10d797bdf700e6fce4717085d` — Do not edit files in this directory manually.
+> Upstream SHA: `71474a863f6555973295a41eb818bf536baf9d13` — Do not edit files in this directory manually.
 
 # caddy-blocker-plugin
 
